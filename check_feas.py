@@ -2,7 +2,7 @@ import numpy as np
 import itertools as it
 from sign_solve import solve
 
-N = 3
+N = 2
 V = np.array(tuple(it.product((-1, 1), repeat=N))).T
 
 # backtrack perceptron
@@ -45,17 +45,21 @@ idxs = ((nxts > 0) * 2**np.arange(N-1,-1,-1).reshape(1, N, 1)).sum(axis=1).astyp
 print(idxs.shape) # num multichotomies, num vertices = 2**N
 print(idxs)
 
-# num_multi**2 possible 2-step nxts (maybe with duplicates)
-idxs_2 = set()
-# for multis in it.product(range(idxs.shape[0]), repeat=2):
-#     i = np.arange(2**N)
-#     for m in multis:
-#         i = idxs[m][i]
-#     idxs_2.add(tuple(i))
-for m0 in range(idxs.shape[0]):
-    print(f" multichotomy {m0} of {idxs.shape[0]}")
-    for m1 in range(idxs.shape[0]):
-        idxs_2.add(tuple(idxs[m1][idxs[m0]]))
+# # num_multi**2 possible 2-step nxts (maybe with duplicates)
+# idxs_2 = set()
+# for m0 in range(idxs.shape[0]):
+#     print(f" multichotomy {m0} of {idxs.shape[0]}")
+#     i1 = idxs[m0]
+#     for m1 in range(idxs.shape[0]):
+#         idxs_2.add(tuple(idxs[m1][i1]))
 
-print(len(idxs_2)) # turns out to be 2**12?? 4096, much smaller than 2744**2
+# idxs_2 = np.array([i for i in idxs_2])
+# np.save("idxs_2.npy", idxs_2)
+
+idxs_2 = np.load("idxs_2.npy")
+print(idxs_2.shape)
 print(idxs.shape[0]**2)
+
+# brute check all keysets with size M = N+1 for shattering of idxs_2
+# probably don't need to check symmetric M-sets (those related by an invertible NxN matrix)
+
