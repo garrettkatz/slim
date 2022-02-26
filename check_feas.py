@@ -1,8 +1,10 @@
+import os
 import numpy as np
+from scipy.special import comb
 import itertools as it
 from sign_solve import solve
 
-N = 2
+N = 3
 V = np.array(tuple(it.product((-1, 1), repeat=N))).T
 
 # backtrack perceptron
@@ -37,7 +39,13 @@ for W, out in zip(Ws, feas_outs):
 
 # num_feas**N possible output arrays
 nxts = []
+last_first = 0
 for hemis in it.product(range(feas_outs.shape[0]), repeat=N):
+    if hemis[0] != last_first:
+        print(f"hemi {hemis[0]} of {feas_outs.shape[0]}...")
+        last_first = hemis[0]
+    
+    # memory intensive, build idxs in here?
     nxts.append(np.array([feas_outs[h] for h in hemis]))
 nxts = np.array(nxts)
 print(nxts.shape) # num multichotomies, N, 2**N
@@ -45,21 +53,40 @@ idxs = ((nxts > 0) * 2**np.arange(N-1,-1,-1).reshape(1, N, 1)).sum(axis=1).astyp
 print(idxs.shape) # num multichotomies, num vertices = 2**N
 print(idxs)
 
-# # num_multi**2 possible 2-step nxts (maybe with duplicates)
-# idxs_2 = set()
-# for m0 in range(idxs.shape[0]):
-#     print(f" multichotomy {m0} of {idxs.shape[0]}")
-#     i1 = idxs[m0]
-#     for m1 in range(idxs.shape[0]):
-#         idxs_2.add(tuple(idxs[m1][i1]))
+fname = f"twostep_{N}.npy"
+if os.path.exists(fname):
+    twostep = np.load(fname)
+else:
+    # num_multi**2 possible 2-step nxts (maybe with duplicates)
+    twostep = set()
+    for m0 in range(idxs.shape[0]):
+        print(f" multichotomy {m0} of {idxs.shape[0]}")
+        i1 = idxs[m0]
+        for m1 in range(idxs.shape[0]):
+            twostep.add(tuple(idxs[m1][i1]))
 
-# idxs_2 = np.array([i for i in idxs_2])
-# np.save("idxs_2.npy", idxs_2)
+    twostep = np.array([i for i in twostep])
+    np.save(fname, twostep)
 
-idxs_2 = np.load("idxs_2.npy")
-print(idxs_2.shape)
+print(twostep.shape) # num multis, 2**N
 print(idxs.shape[0]**2)
 
-# brute check all keysets with size M = N+1 for shattering of idxs_2
+# brute check all keysets with size M = N+1 for shattering of twostep
 # probably don't need to check symmetric M-sets (those related by an invertible NxN matrix)
+
+# M = N
+M = 2
+num_shatters = 0
+for k,keys in enumerate(map(list, it.combinations(range(2**N), M))):
+    print(f"{k} of {int(comb(2**N, M))}: {keys}")
+    feas_maps = set()
+    keyset = set(keys)
+    for idx in twostep:
+        vals = idx[keys]
+        if set(vals) == keyset:
+            feas_maps.add(tuple(vals))
+    # input(feas_maps)
+    if len(feas_maps) == M**M:
+        num_shatters += 1
+print(f"{num_shatters} keysets shatter")
 
