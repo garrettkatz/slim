@@ -5,7 +5,7 @@ from scipy.special import comb
 import itertools as it
 from sign_solve import solve
 
-N = 2
+N = 3
 V = np.array(tuple(it.product((-1, 1), repeat=N))).T
 print(V.shape) # (num neurons N, num verticies 2**N)
 
@@ -57,16 +57,20 @@ for k,keys in enumerate(map(list, it.combinations(range(2**N), M))):
         # print(hemis[:,vals])
         for n in range(N):
             # input(V[n:n+1, vals])
-            if not (V[n:n+1, vals] == hemis[:,vals]).all(axis=1).any():
+            if not (V[n:n+1, vals] == hemis[:,keys]).all(axis=1).any():
                 shattered = False
                 break
-            a = (V[n:n+1, vals] == hemis[:,vals]).all(axis=1).argmax()
-            # something wrong between vv ^^
-            assert (np.sign(Ws[vals[a]] @ V[n:n+1, vals]) == hemis[:,vals[a]]).all()
+            a = (V[n:n+1, vals] == hemis[:,keys]).all(axis=1).argmax()
+            # print(Ws[a].shape)
+            # print(V[:, keys].shape)
+            # print(hemis[a:a+1,keys].shape)
+            # print(V[n:n+1,vals].shape)
+            assert (np.sign(Ws[a] @ V[:, keys]) == hemis[a:a+1,keys]).all()
+            assert (np.sign(Ws[a] @ V[:, keys]) == V[n:n+1,vals]).all()
         if not shattered: break
     if shattered: num_shatters += 1
-    print("shattered:", shattered)
-print(f"{num_shatters} keysets shatter")
+    # print("shattered:", shattered)
+print(f"{num_shatters} of {int(comb(2**N, M))} keysets shatter")
 
 
 
