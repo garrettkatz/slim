@@ -3,7 +3,7 @@ import pickle as pk
 import numpy as np
 import itertools as it
 
-N = 4
+N = 3
 V = np.array(tuple(it.product((-1, 1), repeat=N))).T
 print("V.shape:", V.shape) # (num neurons N, num verticies 2**N)
 
@@ -24,14 +24,15 @@ def check(kidx, vidx, hidx):
         m2.append(matches.argmax())
     return m1, m2
 
-def leading_shatter(kidx, vidx, hidx, solns):
+def leading_shatter(kidx, vidx, hidx, solns, justone=False):
     sat = check(kidx[:len(vidx)], vidx, hidx)
     if sat == False: return False
     if len(vidx) < len(kidx):
         for v in kidx:
             any_h = False
             for h in range(2**N):
-                any_h = any_h or leading_shatter(kidx, vidx + [v], hidx + [h], solns)
+                any_h = any_h or leading_shatter(kidx, vidx + [v], hidx + [h], solns, justone)
+                if justone and any_h: break
             if not any_h: return False
     else: # sat == True and len(vidx) == len(kidx)
         if tuple(vidx) not in solns[kidx]: solns[kidx][tuple(vidx)] = []
@@ -39,12 +40,12 @@ def leading_shatter(kidx, vidx, hidx, solns):
     return True
 
 # M = N
-M = 6
+M = 4
 kidxs = []
 solns = {}
 for k,kidx in enumerate(it.combinations(range(2**N), M)):
     solns[kidx] = {}
-    shattered = leading_shatter(kidx, [], [], solns)
+    shattered = leading_shatter(kidx, [], [], solns, justone=True)
     print(f"{k} of {comb(V.shape[1], M, exact=True)} kidxs: shattered={shattered}...")
 
 print("shattered kidxs:")
