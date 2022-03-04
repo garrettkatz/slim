@@ -24,6 +24,10 @@ def check(kidx, vidx, hidx):
         m2.append(matches.argmax())
     return m1, m2
 
+# justone doesn't work as expected:
+# even though it terminates current hidx[depth] early, a different hidx[depth-1] is still tried with the same vidx[depth-1:depth+1]
+# would fix this if all v in kidx loops happened shallower than all h in range(2**N) loops
+# but then it would not be able to abort unshatterable kidxs early
 def leading_shatter(kidx, vidx, hidx, solns, justone=False):
     sat = check(kidx[:len(vidx)], vidx, hidx)
     if sat == False: return False
@@ -39,13 +43,30 @@ def leading_shatter(kidx, vidx, hidx, solns, justone=False):
         solns[kidx][tuple(vidx)].append(sat)
     return True
 
+# # this might fix justone
+# # but doesn't work because different vidx[depth] will require different hidx[depth]
+# def leading_shatter(kidx, vidx, hidx, solns, justone=False):
+#     sat = check(kidx[:len(vidx)], vidx, hidx)
+#     if sat == False: return False
+#     if len(vidx) < len(kidx):
+#         for h in range(2**N):
+#             all_v = True
+#             for v in kidx:
+#                 all_v = all_v and leading_shatter(kidx, vidx + [v], hidx + [h], solns, justone)
+#                 if not all_v: break
+#             if all_v and justone: break
+#     else: # sat == True and len(vidx) == len(kidx)
+#         if tuple(vidx) not in solns[kidx]: solns[kidx][tuple(vidx)] = []
+#         solns[kidx][tuple(vidx)].append(sat)
+#     return True
+
 # M = N
 M = 4
 kidxs = []
 solns = {}
 for k,kidx in enumerate(it.combinations(range(2**N), M)):
     solns[kidx] = {}
-    shattered = leading_shatter(kidx, [], [], solns, justone=True)
+    shattered = leading_shatter(kidx, [], [], solns, justone=False)
     print(f"{k} of {comb(V.shape[1], M, exact=True)} kidxs: shattered={shattered}...")
 
 print("shattered kidxs:")
