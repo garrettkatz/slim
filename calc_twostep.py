@@ -4,6 +4,10 @@ import numpy as np
 import itertools as it
 
 N = 4
+M = 5
+justone_kidx=True
+justone_soln=True
+
 V = np.array(tuple(it.product((-1, 1), repeat=N))).T
 print("V.shape:", V.shape) # (num neurons N, num verticies 2**N)
 
@@ -80,18 +84,16 @@ def leading_shatter(kidx, vidx, hidx, solns, justone=False):
 #         solns[kidx][tuple(vidx)].append(sat)
 #     return True
 
-# M = N
-M = 7
 kidxs = []
 solns = {}
 for k,kidx in enumerate(it.combinations(range(2**N), M)):
     # kidx is unshatterable if it contains both +/- v
     if any((2**N - j - 1) in kidx for j in kidx): continue
     solns[kidx] = {}
-    # shattered = leading_shatter(kidx, [], [], solns, justone=False)
-    shattered = check_shatter(kidx, solns, justone=True)
+    # shattered = leading_shatter(kidx, [], [], solns, justone_soln)
+    shattered = check_shatter(kidx, solns, justone_soln)
     print(f"{k} of {comb(V.shape[1], M, exact=True)} kidxs: {kidx} shattered={shattered}...")
-    if shattered: break # only find one shattered kidx
+    if shattered and justone_kidx: break # only find one shattered kidx
 
 print("shattered kidxs:")
 num_shattered = 0
