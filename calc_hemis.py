@@ -5,7 +5,7 @@ from scipy.special import comb
 import itertools as it
 from sign_solve import solve
 
-N = 4
+N = 3
 V = np.array(tuple(it.product((-1, 1), repeat=N))).T
 print(V.shape) # (num neurons N, num verticies 2**N)
 
@@ -46,3 +46,18 @@ else:
 print(hemis.shape)
 print(hemis) # (num_dichotomies, num vertices = 2**N)
 
+# all columns have both signs?
+print("cols have both signs:")
+print((hemis < 0).any(axis=0) & (hemis > 0).any(axis=0))
+
+# all rows have both signs?
+# hemichotomies necessarily have an equal number of +/-1
+print("rows have both signs (count of each):")
+print((hemis < 0).any(axis=1) & (hemis > 0).any(axis=1))
+print((hemis < 0).sum(axis=1))
+print((hemis > 0).sum(axis=1))
+
+
+# # exp case M ~ 2**(N-1), first kidx: is every binary integer 0 ... M-1 found in the rows of H[:,kidx]?
+# # although first kidx does not shatter N4M8
+# print(np.unique(hemis[:,:2**(N-1)]))
