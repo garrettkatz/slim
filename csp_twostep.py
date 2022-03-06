@@ -4,7 +4,7 @@ import numpy as np
 import itertools as it
 
 N = 4
-M = 5
+M = 8
 justone_kidx=True
 justone_soln=True
 
@@ -26,7 +26,7 @@ def constrain(kidx, vidx, j, k, hidx, m1, m2, solns, justone):
             m2[i] = m2[i][H[m2[i], hidx[j]] == V[i, vidx[j]]]
             if 0 in (len(m1[i]), len(m2[i])):
                 return False # unsatisfiable
-        # base case
+        # base case; only reached if satisfiable
         if j == M-1:
             solns[kidx][vidx].append((hidx, m1, m2))
             return True
@@ -42,7 +42,7 @@ def constrain(kidx, vidx, j, k, hidx, m1, m2, solns, justone):
     # for i in range(N):
     #     hidx[j+1] = hidx[j+1][(H[m2[i][:,np.newaxis], hidx[j+1]] == V[i, vidx[j+1]]).any(axis=0)]
     # recurse
-    any_solved = True
+    any_solved = False
     for k1 in range(len(hidx[j+1])):
         solved = constrain(kidx, vidx, j+1, k1, hidx, m1, m2, solns, justone)
         any_solved = any_solved or solved
@@ -56,8 +56,8 @@ for k,kidx in enumerate(it.combinations(range(2**N), M)):
     if any((2**N - j - 1) in kidx for j in kidx): continue
     solns[kidx] = {}
     shattered = True
-    for v,vidx in enumerate(it.product(kidx, repeat=len(kidx))):
-        print(kidx, v, vidx)
+    for v,vidx in enumerate(it.product(kidx, repeat=M)):
+        print(kidx, f"{v} of {M**M}", vidx)
         solns[kidx][vidx] = []
 
         j = -1

@@ -5,7 +5,7 @@ from scipy.special import comb
 import itertools as it
 from sign_solve import solve
 
-N = 3
+N = 5
 V = np.array(tuple(it.product((-1, 1), repeat=N))).T
 print(V.shape) # (num neurons N, num verticies 2**N)
 
