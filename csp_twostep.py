@@ -38,6 +38,9 @@ def constrain(kidx, vidx, j, k, hidx, m1, m2, solns, justone):
         #         m2[i] = m2[i][match.any(axis=1)]
         #         if 0 in (len(hidx[jp]), len(m2[i])):
         #             return False # unsatisfiable
+    # # also slower
+    # for i in range(N):
+    #     hidx[j+1] = hidx[j+1][(H[m2[i][:,np.newaxis], hidx[j+1]] == V[i, vidx[j+1]]).any(axis=0)]
     # recurse
     any_solved = True
     for k1 in range(len(hidx[j+1])):
