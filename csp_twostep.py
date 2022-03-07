@@ -3,8 +3,8 @@ import pickle as pk
 import numpy as np
 import itertools as it
 
-N = 4
-M = 8
+N = 3
+M = 5
 justone_kidx=True
 justone_soln=True
 
@@ -77,9 +77,11 @@ print("shattered kidxs:")
 num_shattered = 0
 largest_solns = 0
 for kidx in sorted(solns.keys()):
-    if len(solns[kidx]) != M**M: continue
-    num_shattered += 1
-    for vidx in sorted(solns[kidx].keys()):
+    all_solved = True
+    for vidx in it.product(kidx, repeat=M):
+        if len(solns[kidx][vidx]) == 0:
+            all_solved = False
+            break
         # print(kidx, vidx, f"{len(solns[kidx][vidx])} solns")
         largest_solns = max(largest_solns, len(solns[kidx][vidx]))
         for hidx, m1, m2 in solns[kidx][vidx]:
@@ -89,7 +91,9 @@ for kidx in sorted(solns.keys()):
             W2 = np.concatenate([weights[i] for i in m2], axis=0)
             Y = np.sign(W2 @ np.sign(W1 @ V[:,kidx]))
             assert np.allclose(Y, V[:,vidx])
-    print(kidx, " shatterable")
+    if all_solved:
+        print(kidx, " shatterable")
+        num_shattered += 1
 # print(f"{num_shattered} of {comb(V.shape[1], M, exact=True)} shattered kidxs")
 print(f"{num_shattered} of {len(solns)} shattered kidxs")
 print(f"{largest_solns} solns at most")
