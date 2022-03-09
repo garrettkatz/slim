@@ -5,7 +5,9 @@ from scipy.special import comb
 import itertools as it
 from sign_solve import solve
 
-N = 5
+np.set_printoptions(threshold=np.inf)
+
+N = 4
 V = np.array(tuple(it.product((-1, 1), repeat=N))).T
 print(V.shape) # (num neurons N, num verticies 2**N)
 
@@ -57,6 +59,9 @@ print((hemis < 0).any(axis=1) & (hemis > 0).any(axis=1))
 print((hemis < 0).sum(axis=1))
 print((hemis > 0).sum(axis=1))
 
+import matplotlib.pyplot as pt
+pt.imshow(hemis)
+pt.show()
 
 # # exp case M ~ 2**(N-1), first kidx: is every binary integer 0 ... M-1 found in the rows of H[:,kidx]?
 # # although first kidx does not shatter N4M8
