@@ -3,8 +3,8 @@ import pickle as pk
 import numpy as np
 import itertools as it
 
-N = 3
-M = 5
+N = 5
+M = 8
 justone_kidx=True
 justone_soln=True
 
@@ -72,6 +72,9 @@ for k,kidx in enumerate(it.combinations(range(2**N), M)):
 
     print(f"{k} of {comb(V.shape[1], M, exact=True)} kidxs: {kidx} shattered={shattered}...")
     if shattered and justone_kidx: break # only find one shattered kidx
+
+    # actually, if col permutation permutes with forward pass, either all or none kidxs shatter
+    break
 
 print("shattered kidxs:")
 num_shattered = 0
