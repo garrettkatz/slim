@@ -8,11 +8,16 @@ import itertools as it
 
 N = 4 # number of neurons
 M = 5 # number of key-value pairs
-justone_kidx=True
-justone_soln=True
-store_solns=False
-do_check=False
-verbose=True
+justone_soln = False
+do_check = True
+check_first = False
+check_all = False
+check_random = True
+do_csp = True
+verbose = True
+save_depth = 2
+
+save_mod = M**(M - save_depth)
 
 V = np.array(tuple(it.product((-1, 1), repeat=N))).T
 print("V.shape:", V.shape) # (num neurons N, num verticies 2**N)
@@ -44,8 +49,7 @@ def constrain(kidx, vidx, j, k, hidx, m1, m2, solns, justone):
         # if not feas: return False
         # base case; only reached if satisfiable
         if j == M-1:
-            if store_solns:
-                solns[kidx][vidx].append((hidx, m1, m2))
+            solns[vidx].append((hidx, m1, m2))
             return True
         # else: # seems slower
         #     # propagate j+ constraints
@@ -66,66 +70,66 @@ def constrain(kidx, vidx, j, k, hidx, m1, m2, solns, justone):
         if solved and justone: break
     return any_solved
 
-kidxs = []
-solns = {}
-any_shattered = False
-for k,kidx in enumerate(it.combinations(range(2**N), M)):
-    # kidx is unshatterable if it contains both +/- v
-    if any((2**N - j - 1) in kidx for j in kidx): continue
-    solns[kidx] = {}
-    shattered = True
+if do_csp:
 
+    any_shattered = False
+    kidx = tuple(range(M))
+    shattered = True
+    
     hidx = [np.arange(2**N) for _ in range(M)]
     m1 = [np.arange(H.shape[0]) for _ in range(N)]
     m2 = [np.arange(H.shape[0]) for _ in range(N)]
         
     for v,vidx in enumerate(it.product(kidx, repeat=M)):
-
-        if store_solns:
-            solns[kidx][vidx] = []
-
+    
+        if v % save_mod == 0: solns = {}
+        solns[vidx] = []
+    
         j = -1
         k1 = -1
         solved = constrain(kidx, vidx, j, k1, hidx, m1, m2, solns, justone_soln)
         shattered = shattered and solved
         if not solved: break
-
-        if verbose: print(kidx, f"{v} of {M**M}", vidx,
-            f"{len(solns[kidx][vidx])} solns stored" if store_solns else "")
-
-    print(f"{k} of {comb(V.shape[1], M, exact=True)} kidxs: {kidx} shattered={shattered}...")
-
-    any_shattered = any_shattered or shattered
     
-    if shattered and justone_kidx: break # only find one shattered kidx
+        if verbose: print(f"{v} of {M**M}", vidx, f"{len(solns[vidx])} solns stored")
+    
+        if (v+1) % save_mod == 0:
+            vlead = "_".join(map(str, vidx[:save_depth]))
+            fname = f"solns/N{N}M{M}_{vlead}"
+            with open(fname, "wb") as f: pk.dump(solns, f)
+    
+    print("kidx shatters:", shattered)
 
-    # actually, if col permutation permutes with forward pass, either all or none kidxs shatter
-    break
-
-print("Any kidxs shatter:", any_shattered)
-
-if do_check and store_solns and any_shattered:
-    print("shattered kidxs:")
-    num_shattered = 0
+if do_check and shattered:
+    print("checking solns")
     largest_solns = 0
-    for kidx in sorted(solns.keys()):
-        all_solved = True
-        for v,vidx in enumerate(it.product(kidx, repeat=M)):
-            if len(solns[kidx][vidx]) == 0:
-                all_solved = False
-                break
-            print(kidx, f"{v} of {M**M}", vidx, f"{len(solns[kidx][vidx])} solns")
-            largest_solns = max(largest_solns, len(solns[kidx][vidx]))
-            for hidx, m1, m2 in solns[kidx][vidx]:
-                # # check first m1/m2 soln
-                # m1 = [m1[i][0] for i in range(N)]
-                # m2 = [m2[i][0] for i in range(N)]
-                # W1 = np.concatenate([weights[i] for i in m1], axis=0)
-                # W2 = np.concatenate([weights[i] for i in m2], axis=0)
-                # Y = np.sign(W2 @ np.sign(W1 @ V[:,kidx]))
-                # assert np.allclose(Y, V[:,vidx])
+    all_solved = True
+    for v,vidx in enumerate(it.product(kidx, repeat=M)):
 
-                # check random m1/m2 soln
+        if v % save_mod == 0:
+            vlead = "_".join(map(str, vidx[:save_depth]))
+            fname = f"solns/N{N}M{M}_{vlead}"
+            with open(fname, "rb") as f: solns = pk.load(f)
+
+        if len(solns[vidx]) == 0:
+            all_solved = False
+            break
+
+        print(f"{v} of {M**M}", vidx, f"{len(solns[vidx])} solns")
+        largest_solns = max(largest_solns, len(solns[vidx]))
+
+        for hidx, m1, m2 in solns[vidx]:
+            # check first m1/m2 soln
+            if check_first:
+                m1 = [m1[i][0] for i in range(N)]
+                m2 = [m2[i][0] for i in range(N)]
+                W1 = np.concatenate([weights[i] for i in m1], axis=0)
+                W2 = np.concatenate([weights[i] for i in m2], axis=0)
+                Y = np.sign(W2 @ np.sign(W1 @ V[:,kidx]))
+                assert np.allclose(Y, V[:,vidx])
+
+            # check random m1/m2 soln
+            elif check_random:
                 m1 = [np.random.choice(m1[i]) for i in range(N)]
                 m2 = [np.random.choice(m2[i]) for i in range(N)]
                 W1 = np.concatenate([weights[i] for i in m1], axis=0)
@@ -133,18 +137,17 @@ if do_check and store_solns and any_shattered:
                 Y = np.sign(W2 @ np.sign(W1 @ V[:,kidx]))
                 assert np.allclose(Y, V[:,vidx])
 
-                # # check all m1/m2 solns
-                # for i1 in it.product(*m1):
-                #     W1 = np.concatenate([weights[i] for i in i1], axis=0)
-                #     assert np.allclose(V[:,hidx], np.sign(W1 @ V[:,kidx]))
-                # for i2 in it.product(*m2):
-                #     W2 = np.concatenate([weights[i] for i in i2], axis=0)
-                #     assert np.allclose(V[:,vidx], np.sign(W2 @ V[:,hidx]))
+            # check all m1/m2 solns
+            elif check_all:
+                for i1 in it.product(*m1):
+                    W1 = np.concatenate([weights[i] for i in i1], axis=0)
+                    assert np.allclose(V[:,hidx], np.sign(W1 @ V[:,kidx]))
+                for i2 in it.product(*m2):
+                    W2 = np.concatenate([weights[i] for i in i2], axis=0)
+                    assert np.allclose(V[:,vidx], np.sign(W2 @ V[:,hidx]))
 
-        if all_solved:
-            print(kidx, " shatterable")
-            num_shattered += 1
-    # print(f"{num_shattered} of {comb(V.shape[1], M, exact=True)} shattered kidxs")
-    print(f"{num_shattered} of {len(solns)} shattered kidxs")
+    if all_solved:
+        print("confirmed kidx shatters")
+
     print(f"{largest_solns} solns at most")
 
