@@ -6,16 +6,16 @@ import pickle as pk
 import numpy as np
 import itertools as it
 
-N = 4 # number of neurons
-M = 5 # number of key-value pairs
+N = 2 # number of neurons
+M = 2 # number of key-value pairs
 justone_soln = False
 do_check = True
 check_first = False
-check_all = False
-check_random = True
+check_all = True
+check_random = False
 do_csp = True
 verbose = True
-save_depth = 2
+save_depth = 0
 
 save_mod = M**(M - save_depth)
 
@@ -70,11 +70,9 @@ def constrain(kidx, vidx, j, k, hidx, m1, m2, solns, justone):
         if solved and justone: break
     return any_solved
 
+shattered = True
+kidx = tuple(range(M))
 if do_csp:
-
-    any_shattered = False
-    kidx = tuple(range(M))
-    shattered = True
     
     hidx = [np.arange(2**N) for _ in range(M)]
     m1 = [np.arange(H.shape[0]) for _ in range(N)]
@@ -102,7 +100,7 @@ if do_csp:
 
 if do_check and shattered:
     print("checking solns")
-    largest_solns = 0
+    least_solns, largest_solns = np.inf, 0
     all_solved = True
     for v,vidx in enumerate(it.product(kidx, repeat=M)):
 
@@ -117,6 +115,7 @@ if do_check and shattered:
 
         print(f"{v} of {M**M}", vidx, f"{len(solns[vidx])} solns")
         largest_solns = max(largest_solns, len(solns[vidx]))
+        least_solns = min(least_solns, len(solns[vidx]))
 
         for hidx, m1, m2 in solns[vidx]:
             # check first m1/m2 soln
@@ -149,5 +148,5 @@ if do_check and shattered:
     if all_solved:
         print("confirmed kidx shatters")
 
-    print(f"{largest_solns} solns at most")
+    print(f"{least_solns}-{largest_solns} solns")
 

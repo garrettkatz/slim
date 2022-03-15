@@ -6,12 +6,12 @@ import pickle as pk
 import numpy as np
 import itertools as it
 
-N = 4 # number of neurons
-M = 5 # number of key-value pairs
+N = 3 # number of neurons
+M = 4 # number of key-value pairs
 justone_kidx=True
 justone_soln=True
 store_solns=False
-do_check=False
+do_check=True
 verbose=True
 
 V = np.array(tuple(it.product((-1, 1), repeat=N))).T
