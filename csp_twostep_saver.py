@@ -6,16 +6,17 @@ import pickle as pk
 import numpy as np
 import itertools as it
 
-N = 2 # number of neurons
-M = 2 # number of key-value pairs
+N = 3 # number of neurons
+M = 4 # number of key-value pairs
 justone_soln = False
 do_check = True
 check_first = False
 check_all = True
 check_random = False
-do_csp = True
+do_csp = False
 verbose = True
-save_depth = 0
+revert_onestep = False
+save_depth = 1
 
 save_mod = M**(M - save_depth)
 
@@ -77,6 +78,11 @@ if do_csp:
     hidx = [np.arange(2**N) for _ in range(M)]
     m1 = [np.arange(H.shape[0]) for _ in range(N)]
     m2 = [np.arange(H.shape[0]) for _ in range(N)]
+
+    # constrain one layer to identity to encapsulate onestep
+    if revert_onestep:
+        ww = np.array(weights).reshape(-1,N)
+        m1 = [np.array(np.isclose(np.eye(N)[i], ww).all(axis=1).argmax()) for i in range(N)]
         
     for v,vidx in enumerate(it.product(kidx, repeat=M)):
     
@@ -93,7 +99,10 @@ if do_csp:
     
         if (v+1) % save_mod == 0:
             vlead = "_".join(map(str, vidx[:save_depth]))
-            fname = f"solns/N{N}M{M}_{vlead}"
+            if revert_onestep:
+                fname = f"solns/N{N}M{M}S1_{vlead}"
+            else:
+                fname = f"solns/N{N}M{M}_{vlead}"
             with open(fname, "wb") as f: pk.dump(solns, f)
     
     print("kidx shatters:", shattered)
@@ -106,7 +115,10 @@ if do_check and shattered:
 
         if v % save_mod == 0:
             vlead = "_".join(map(str, vidx[:save_depth]))
-            fname = f"solns/N{N}M{M}_{vlead}"
+            if revert_onestep:
+                fname = f"solns/N{N}M{M}S1_{vlead}"
+            else:
+                fname = f"solns/N{N}M{M}_{vlead}"
             with open(fname, "rb") as f: solns = pk.load(f)
 
         if len(solns[vidx]) == 0:
