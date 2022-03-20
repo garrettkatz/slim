@@ -38,16 +38,14 @@ for option in it.product(*options):
         u = np.sign(w1.T @ z)
 
         # # first attempted LR:
-        # θi.shape = (4, N, N) | (4, 1, 1)
+        # θi.shape = (4, 1, 1) (first, and then try (4, N, N))
         # for p,(a,b) in enumerate(it.product((x, u), (h, z))):
         #     w1 += b * θ1[p] * a.T
         # for p,(a,b) in enumerate(it.product((h, z), (v, y))):
         #     w2 += b * θ2[p] * a.T    
         # return w1, w2
 
+        # # accumulate the sign-solve data for the foregoing
 
-# m1 = [np.isclose(np.eye(N)[i], weights).all(axis=1).argmax() for i in range(N)]
-# m2 = list(m1)
-
-# sign solves:
-
+    # run the gigantic signsolve
+    # if successful, can break out of options loop
