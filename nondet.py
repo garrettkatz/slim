@@ -1,5 +1,6 @@
 """
 This might all be doable more elegantly using coroutines/yield from:
+https://medium.com/analytics-vidhya/python-generators-coroutines-async-io-with-examples-28771b586578
 https://stackoverflow.com/questions/9708902/in-practice-what-are-the-main-uses-for-the-yield-from-syntax-in-python-3-3
 https://peps.python.org/pep-0342/
 https://peps.python.org/pep-0380/#formal-semantics
@@ -44,18 +45,35 @@ class Runner:
         
 if __name__ == "__main__":
 
-    r = Runner()
-    def fn():
-        x = r.choice(range(3))
-        if x < 2:
-            y = r.choice(range(3))
-        else:
-            # y = r.choice(range(4))
-            y = r.choice([])
-        return x,y
+    # # works, just ugly impl of Runner
+    # r = Runner()
+    # def fn():
+    #     x = r.choice(range(3))
+    #     if x != 1:
+    #         y = r.choice(range(3))
+    #     else:
+    #         # y = r.choice(range(4))
+    #         y = r.choice([])
+    #     z = r.choice([True, False])
+    #     return x,y,z
 
-    for ret in r.run(fn):
-        print(ret)
-        # if x == 3: break
+    # for ret in r.run(fn):
+    #     print(ret)
+    #     # if x == 3: break
+
+    # asyncio scratch
+    async def gen():
+        for i in range(3): yield i
+
+    def choi():
+        return gen()
     
+    def fn():
+        x = choi()
+        return x
+    
+    print(fn())
+    print(fn())
+    print(fn())
+
     
