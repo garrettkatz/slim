@@ -61,19 +61,35 @@ if __name__ == "__main__":
     #     print(ret)
     #     # if x == 3: break
 
-    # asyncio scratch
-    async def gen():
-        for i in range(3): yield i
 
-    def choi():
-        return gen()
-    
-    def fn():
-        x = choi()
-        return x
-    
-    print(fn())
-    print(fn())
-    print(fn())
+    # # coro scratch 1
+    # def coro1():
+    #     x = (yield 1)
+    #     print('coro1', x)
+    #     yield 3
+    #     yield 4
 
+    # def coro2(c):
+    #     z = c.send(None)
+    #     print('coro2 z', z)
+    #     # y = c.send(2)
+    #     # print('coro2 y', y)
+    #     for y in c:
+    #         print('coro2 y', y)
     
+    # c = coro1()
+    # print(c)
+    # coro2(c)
+
+    # coro scratch 2
+    def coro():
+        for i in range(4):
+            yield i
+
+    c = coro()
+    print(c.send(None))
+    print(c.send(None))
+    print(c.send(None))
+    print(c.send(None))
+
+
