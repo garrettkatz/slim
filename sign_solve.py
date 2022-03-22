@@ -18,4 +18,3 @@ def solve(X, Y):
     assert (np.sign(W @ X) == Y).all()
     return True, W
 
-
