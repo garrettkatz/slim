@@ -81,15 +81,79 @@ if __name__ == "__main__":
     # print(c)
     # coro2(c)
 
-    # coro scratch 2
-    def coro():
-        for i in range(4):
-            yield i
+    # # coro scratch 2
+    # def coro():
+    #     for i in range(4):
+    #         yield i
 
-    c = coro()
-    print(c.send(None))
-    print(c.send(None))
-    print(c.send(None))
-    print(c.send(None))
+    # c = coro()
+    # print(c.send(None))
+    # print(c.send(None))
+    # print(c.send(None))
+    # print(c.send(None))
 
 
+    # nd coro scratch
+
+    depth = -1
+    itrs = []
+    itms = []
+
+    def choi(itr):
+        global depth, itrs, itms
+        depth += 1
+        if depth >= len(itrs):
+            itrs.append(iter(itr))
+            itms.append(next(itrs[depth]))
+        return itms[depth]
+    
+    def fn():
+        global depth, itrs, itms
+        print("fn:::")
+        print(depth)
+        print(itrs)
+        print(itms)
+        input("..")
+        x = choi(range(3))
+        y = choi(range(2))
+        return x,y
+
+    def abyss(d):
+        global depth, itrs, itms
+        print((" "*d) + f"abyss({d}):::")
+        print((" "*d) + f"{depth}")
+        print((" "*d) + f"{itrs}")
+        print((" "*d) + f"{itms}")
+        if d < len(itrs):
+            yield from abyss(d+1)
+            for itm in itrs[d]:
+                itms[d] = itm
+                yield from abyss(d+1)
+            itrs, itms = itrs[:d], itms[:d]
+        else:
+            depth = -1
+            yield fn()
+            
+    def run():
+        global depth, itrs, itms
+        depth = -1
+        yield fn()
+        yield from abyss(0)
+
+    results = []
+    for result in run():
+        print("result:::")
+        print(result)
+        results.append(result)
+    
+    print(results)
+
+    # depth = -1
+    # print(fn())
+    # print(itms)
+    # depth = -1
+    # print(fn())
+    # print(itms)
+    # depth = -1
+    # print(fn())
+    # print(itms)
