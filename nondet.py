@@ -92,68 +92,137 @@ if __name__ == "__main__":
     # print(c.send(None))
     # print(c.send(None))
 
+    # # coro scratch 3: generator with side yields    
+    # def coro():
+    #     x = (yield)
+    #     for i in range(4):
+    #         x = (yield x + 2)
+    # c = coro()
+    # c.send(None)    
+    # def gen():
+    #     for i in range(4):
+    #         yield c.send(i)    
+    # for i in gen():
+    #     print(i)
 
-    # nd coro scratch
-
-    depth = -1
-    itrs = []
-    itms = []
-
-    def choi(itr):
-        global depth, itrs, itms
-        depth += 1
-        if depth >= len(itrs):
-            itrs.append(iter(itr))
-            itms.append(next(itrs[depth]))
-        return itms[depth]
+    # # coro scratch 4: dynamically bound coro, multiple callers
+    # def coro():
+    #     x = (yield)
+    #     for i in range(8):
+    #         x = (yield x + 2)
+    # c = None
+    # def gen1():
+    #     for i in range(4):
+    #         yield c.send(i)
+    # def gen2():
+    #     for i in range(4):
+    #         yield c.send(i)
+    # c = coro()
+    # c.send(None)    
+    # for i in gen1(): print(i)
+    # for i in gen2(): print(i)
     
+    # # nd coro scratch 1
+    # depth = -1
+    # itrs = []
+    # itms = []
+    # def choi(itr):
+    #     global depth, itrs, itms
+    #     depth += 1
+    #     if depth >= len(itrs):
+    #         itrs.append(iter(itr))
+    #         itms.append(next(itrs[depth]))
+    #     return itms[depth]    
+    # def fn():
+    #     global depth, itrs, itms
+    #     print("fn:::")
+    #     print(depth)
+    #     print(itrs)
+    #     print(itms)
+    #     input("..")
+    #     x = choi(range(3))
+    #     y = choi(range(2))
+    #     return x,y
+    # def abyss(d):
+    #     global depth, itrs, itms
+    #     print((" "*d) + f"abyss({d}):::")
+    #     print((" "*d) + f"{depth}")
+    #     print((" "*d) + f"{itrs}")
+    #     print((" "*d) + f"{itms}")
+    #     if d < len(itrs):
+    #         yield from abyss(d+1)
+    #         for itm in itrs[d]:
+    #             itms[d] = itm
+    #             yield from abyss(d+1)
+    #         itrs, itms = itrs[:d], itms[:d]
+    #     else:
+    #         depth = -1
+    #         yield fn()            
+    # def run():
+    #     global depth, itrs, itms
+    #     depth = -1
+    #     yield fn()
+    #     yield from abyss(0)
+    # results = []
+    # for result in run():
+    #     print("result:::")
+    #     print(result)
+    #     results.append(result)
+    # print(results)
+
+    # depth = -1
+    # print(fn())
+    # print(itms)
+    # depth = -1
+    # print(fn())
+    # print(itms)
+    # depth = -1
+    # print(fn())
+    # print(itms)
+
+    # nd coro scratch 2
+    def choi(itr, a):
+        i = a.send(itr)
+        return i
+    
+    def abyss():
+        itr = (yield) # from choice
+        for i in itr:
+            yield i # to choice
+
+    a = abyss()
+    a.send(None)
+
     def fn():
-        global depth, itrs, itms
-        print("fn:::")
-        print(depth)
-        print(itrs)
-        print(itms)
-        input("..")
-        x = choi(range(3))
-        y = choi(range(2))
-        return x,y
-
-    def abyss(d):
-        global depth, itrs, itms
-        print((" "*d) + f"abyss({d}):::")
-        print((" "*d) + f"{depth}")
-        print((" "*d) + f"{itrs}")
-        print((" "*d) + f"{itms}")
-        if d < len(itrs):
-            yield from abyss(d+1)
-            for itm in itrs[d]:
-                itms[d] = itm
-                yield from abyss(d+1)
-            itrs, itms = itrs[:d], itms[:d]
-        else:
-            depth = -1
-            yield fn()
-            
-    def run():
-        global depth, itrs, itms
-        depth = -1
-        yield fn()
-        yield from abyss(0)
-
-    results = []
-    for result in run():
-        print("result:::")
-        print(result)
-        results.append(result)
+        x = choi(range(3), a)
+        return x
     
-    print(results)
+    # works with try-except
+    try:
+        while True:
+            print(fn())
+    except StopIteration:
+        print("Done.")
 
-    # depth = -1
-    # print(fn())
-    # print(itms)
-    # depth = -1
-    # print(fn())
-    # print(itms)
-    # depth = -1
-    # print(fn())
-    # print(itms)
+    # # still uncaught stopiter
+    # def runs(f):
+    #     while True: yield fn()
+    # for res in runs(fn):
+    #     print(res)
+    # print("Done.")
+
+    # # 3 good then stop iter
+    # result = fn()
+    # print(result)
+
+    # result = fn()
+    # print(result)
+
+    # result = fn()
+    # print(result)
+
+    # # stopiter
+    # result = fn()
+    # print(result)
+    
+
