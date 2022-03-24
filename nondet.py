@@ -122,6 +122,12 @@ if __name__ == "__main__":
     # for i in gen1(): print(i)
     # for i in gen2(): print(i)
     
+    # # coro scratch 5:
+    # # g = (yield from range(4)) # "'yield' outside function" syntax error
+    # def gen(): yield from range(4)    
+    # g = gen()    
+    # for i in g: print(i)
+    
     # # nd coro scratch 1
     # depth = -1
     # itrs = []
@@ -180,49 +186,53 @@ if __name__ == "__main__":
     # print(fn())
     # print(itms)
 
-    # nd coro scratch 2
-    def choi(itr, a):
-        i = a.send(itr)
-        return i
+    # # nd coro scratch 2
+    # def choi(itr, a):
+    #     i = a.send(itr)
+    #     return i
     
-    def abyss():
-        itr = (yield) # from choice
-        for i in itr:
-            yield i # to choice
+    # def abyss():
+    #     itr = (yield) # from choice
+    #     for i in itr:
+    #         yield i # to choice
 
-    a = abyss()
-    a.send(None)
+    # a = abyss()
+    # a.send(None)
 
-    def fn():
-        x = choi(range(3), a)
-        return x
+    # def fn():
+    #     x = choi(range(3), a)
+    #     return x
     
-    # works with try-except
-    try:
-        while True:
-            print(fn())
-    except StopIteration:
-        print("Done.")
+    # # works with try-except
+    # try:
+    #     while True:
+    #         print(fn())
+    # except StopIteration:
+    #     print("Done.")
 
-    # # still uncaught stopiter
-    # def runs(f):
-    #     while True: yield fn()
-    # for res in runs(fn):
-    #     print(res)
-    # print("Done.")
+    # # # still uncaught stopiter
+    # # def runs(f):
+    # #     while True: yield fn()
+    # # for res in runs(fn):
+    # #     print(res)
+    # # print("Done.")
 
-    # # 3 good then stop iter
-    # result = fn()
-    # print(result)
+    # # # 3 good then stop iter
+    # # result = fn()
+    # # print(result)
 
-    # result = fn()
-    # print(result)
+    # # result = fn()
+    # # print(result)
 
-    # result = fn()
-    # print(result)
+    # # result = fn()
+    # # print(result)
 
-    # # stopiter
-    # result = fn()
-    # print(result)
+    # # # stopiter
+    # # result = fn()
+    # # print(result)
+
+    # nd coro scratch 3
+    # "inc" coro that just increments (deeper) counters and put same item at current depth again in itms array
     
-
+    def gen(d):
+        yield from itrs[depth]:
