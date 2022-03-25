@@ -231,18 +231,52 @@ if __name__ == "__main__":
     # # result = fn()
     # # print(result)
 
-    # nd coro scratch 3: no recursion, works with no try-except (unless itr is empty)
-    # x = yield z: x < ... callers ... < z
+    # # nd coro scratch 3: no recursion, works with no try-except (unless itr is empty)
+    # # x = yield z: x < ... callers ... < z
+    # def abyss(): # < run
+    #     itr = iter( (yield) ) # itr < choi < run < _
+    #     yield next(itr) # _ < run < choi < i
+    #     for i in itr:
+    #         yield # _ < choi < run < _
+    #         yield i # _ < run < choi < i
+
+    # def run(f, a):
+    #     for _ in a:
+    #         print(f())
+
+    # def choi(itr, a):
+    #     i = a.send(itr)
+    #     return i
+
+    # a = abyss()
+    # def fn():
+    #     x = choi(range(4), a)
+    #     return x
+    # run(fn, a)
+
+    # nd coro scratch 4: no recursion but multichoice
     def abyss(): # < run
-        itr = iter( (yield) ) # itr < choi < run < _
-        yield next(itr) # _ < run < choi < i
-        for i in itr:
-            yield # _ < choi < run < _
-            yield i # _ < run < choi < i
+        carry = -1
+        itr0 = iter( (yield) )
+        for i in itr0:
+            if carry > -1: yield
+            itr1 = iter( (yield i) )
+            for j in itr1:
+                if carry > 0: yield
+                if carry > 0: yield i
+                itr2 = iter( (yield j) )
+                for k in itr2:
+                    if carry > 1: yield
+                    if carry > 1: yield i
+                    if carry > 1: yield j
+                    base = yield k
+                    carry = 2
+                carry = 1
+            carry = 0
 
     def run(f, a):
         for _ in a:
-            print(f())
+            print("f() =", f())
 
     def choi(itr, a):
         i = a.send(itr)
@@ -250,7 +284,9 @@ if __name__ == "__main__":
 
     a = abyss()
     def fn():
-        x = choi(range(4), a)
-        return x
+        x = choi(range(2), a)
+        y = choi(range(2), a)
+        z = choi(range(2), a)
+        return x, y, z
     run(fn, a)
 
