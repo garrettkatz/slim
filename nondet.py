@@ -231,22 +231,26 @@ if __name__ == "__main__":
     # # result = fn()
     # # print(result)
 
-    # nd coro scratch 3: no recursion, works with no try-except
-    def abyss():
-        itr = iter( (yield) )
-        yield next(itr)
+    # nd coro scratch 3: no recursion, works with no try-except (unless itr is empty)
+    # x = yield z: x < ... callers ... < z
+    def abyss(): # < run
+        itr = iter( (yield) ) # itr < choi < run < _
+        yield next(itr) # _ < run < choi < i
         for i in itr:
-            yield
-            yield i
+            yield # _ < choi < run < _
+            yield i # _ < run < choi < i
 
-    a = abyss()
+    def run(f, a):
+        for _ in a:
+            print(f())
+
     def choi(itr, a):
         i = a.send(itr)
         return i
 
+    a = abyss()
     def fn():
-        x = choi(range(3), a)
+        x = choi(range(4), a)
         return x
+    run(fn, a)
 
-    for _ in a:
-        print(fn())
