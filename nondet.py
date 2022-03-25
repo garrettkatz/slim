@@ -231,8 +231,22 @@ if __name__ == "__main__":
     # # result = fn()
     # # print(result)
 
-    # nd coro scratch 3
-    # "inc" coro that just increments (deeper) counters and put same item at current depth again in itms array
-    
-    def gen(d):
-        yield from itrs[depth]:
+    # nd coro scratch 3: no recursion, works with no try-except
+    def abyss():
+        itr = iter( (yield) )
+        yield next(itr)
+        for i in itr:
+            yield
+            yield i
+
+    a = abyss()
+    def choi(itr, a):
+        i = a.send(itr)
+        return i
+
+    def fn():
+        x = choi(range(3), a)
+        return x
+
+    for _ in a:
+        print(fn())
