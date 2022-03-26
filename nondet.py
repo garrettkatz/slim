@@ -254,39 +254,133 @@ if __name__ == "__main__":
     #     return x
     # run(fn, a)
 
-    # nd coro scratch 4: no recursion but multichoice
-    def abyss(): # < run
-        carry = -1
-        itr0 = iter( (yield) )
-        for i in itr0:
-            if carry > -1: yield
-            itr1 = iter( (yield i) )
-            for j in itr1:
-                if carry > 0: yield
-                if carry > 0: yield i
-                itr2 = iter( (yield j) )
-                for k in itr2:
-                    if carry > 1: yield
-                    if carry > 1: yield i
-                    if carry > 1: yield j
-                    base = yield k
-                    carry = 2
-                carry = 1
-            carry = 0
+    # # nd coro scratch 4: no recursion but multichoice
+    # def abyss(): # < run
+    #     carry = -1
+    #     itr0 = iter( (yield) )
+    #     for i in itr0:
+    #         if carry > -1: yield
+    #         itr1 = iter( (yield i) )
+    #         for j in itr1:
+    #             if carry > 0: yield
+    #             if carry > 0: yield i
+    #             itr2 = iter( (yield j) )
+    #             for k in itr2:
+    #                 if carry > 1: yield
+    #                 if carry > 1: yield i
+    #                 if carry > 1: yield j
+    #                 base = yield k
+    #                 carry = 2
+    #             carry = 1
+    #         carry = 0
 
-    def run(f, a):
-        for _ in a:
-            print("f() =", f())
+    # def run(f, a):
+    #     for _ in a:
+    #         print("f() =", f())
 
-    def choi(itr, a):
-        i = a.send(itr)
-        return i
+    # def choi(itr, a):
+    #     i = a.send(itr)
+    #     return i
 
-    a = abyss()
+    # a = abyss()
+    # def fn():
+    #     x = choi(range(2), a)
+    #     y = choi(range(2), a)
+    #     z = choi(range(2), a)
+    #     return x, y, z
+    # run(fn, a)
+
+    # # nd coro scratch 5: recursive multichoice
+    # # def abyss(itr=(None,), choices=()):
+    # #     first_done = False
+    # #     for i in itr:
+    # #         if first_done:
+    # #             for c in choices: yield c
+    # #         result = (yield i)
+    # #         if result != None:
+    # #             yield from abyss(iter(result), choices + (i,))
+    # #         first_done = True
+    # def abyss(itr=(None,), choices=()):
+    #     for i, item in enumerate(itr):
+    #         if i > 0:
+    #             for c in choices: yield c
+    #         result = (yield item)
+    #         if result != None:
+    #             yield from abyss(iter(result), choices + (item,))
+
+    # def run(f, a):
+    #     for _ in a:
+    #         res = f()
+    #         # print("f() =", res)
+
+    # def choi(itr, a):
+    #     i = a.send(itr)
+    #     return i
+
+    # a = abyss()
+    
+    # def fn():
+    #     x = choi(range(10), a)
+    #     y = choi(range(10), a)
+    #     z = choi(range(10), a)
+    #     w = choi(range(10), a)
+    #     v = choi(range(10), a)
+    #     return x, y, z, w, v
+
+    def abyss(itr=(None,), choices=()):
+        for i, item in enumerate(itr):
+            if i > 0:
+                for c in choices: yield c
+            result = (yield item)
+            if result != None:
+                yield from abyss(iter(result), choices + (item,))
+
+    class NonDeterminator:
+        def __init__(self):
+            self.abyss = None # or could default to random sampler...
+
+        def choice(self, itr):
+            return self.abyss.send(itr)
+
+        def run(self, f):
+            self.abyss = abyss()
+            for _ in self.abyss: yield f()
+
+    nd = NonDeterminator()
     def fn():
-        x = choi(range(2), a)
-        y = choi(range(2), a)
-        z = choi(range(2), a)
-        return x, y, z
-    run(fn, a)
+        x = nd.choice(range(10))
+        y = nd.choice(range(10))
+        z = nd.choice(range(10))
+        w = nd.choice(range(10))
+        v = nd.choice(range(10))
+        return x, y, z, w, v
+
+    from time import perf_counter
+
+    start = perf_counter()
+    # run(fn, a)
+    for ret in nd.run(fn):
+        # print(ret)
+        res = ret
+    abyss_stop = perf_counter() - start
+
+    # works, just ugly impl of Runner
+    r = Runner()
+    def fn():
+        x = r.choice(range(10))
+        y = r.choice(range(10))
+        z = r.choice(range(10))
+        w = r.choice(range(10))
+        v = r.choice(range(10))
+        return x, y, z, w, v
+
+    start = perf_counter()    
+    for ret in r.run(fn):
+        # print(ret)
+        res = ret
+    try_stop = perf_counter() - start
+    
+    # comparable runtimes
+    print("abyss", abyss_stop)
+    print("try", try_stop)
 
