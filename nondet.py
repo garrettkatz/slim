@@ -111,6 +111,15 @@ if __name__ == "__main__":
         tb.print_exc()
     nd.abyss = None
 
+    print("\nfn(): return nd.choice(1)")
+    def fn():
+        return nd.choice(1)
+    try:
+        for ret in nd.runs(fn): print(ret)
+    except:
+        tb.print_exc()
+    nd.abyss = None
+
     print("\nfn(): return nd.choice(range(0))")
     def fn():
         return nd.choice(range(0))
