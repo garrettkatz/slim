@@ -5,6 +5,28 @@ import matplotlib.pyplot as pt
 import scipy.optimize as so
 from nondet import NonDeterminator
 
+
+# LR(W, x, y):
+# lrterms(W, x, y) -> x, W1x, sign(W2 sign(W1x)), etc
+# make each term shape (N,N) (outer products, broadcast, etc)
+# W_new[i,j] <- (stack(lrterms(W, x, y))[:,i,j] * theta[:,i,j]).sum(axis=0)
+# W_new[i] @ x = ((stack(lrterms(W, x, y))[:,i,:] * theta[:,i,:]).sum(axis=0) * x).sum()
+
+# W_new[i] @ inp[n] = (theta[t,i,j] * lrterms(W,x,y)[t,i,j] * inp[_,_,j]).sum(axes=(0,2))
+# coeff[n,t,i,j] = lrterms(W,x,y)[_,t,i,j] * inp[n,_,_,j]
+
+def fitlr(terms, inp, out)
+    # terms[t,i,j]
+    A_ub
+    
+    A_ub = np.stack([
+        -out[i](terms * inp[n]).flatten()
+    
+    b_ub = -np.ones(A_ub.shape[0])
+
+def lrterms1(W, x, y):
+    return [W, 
+
 N = 4 # number of neurons
 M = 4 # number of key-value pairs
 
