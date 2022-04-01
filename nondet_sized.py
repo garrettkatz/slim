@@ -1,45 +1,45 @@
 # from collections.abc import Iterable, Sized # slow, native errors still informative
 import random
 
-sentinel = object()
-
-def abyss(itr=(None,), choices=()):
-    i = -1
-    for i, item in enumerate(itr):
-        if i > 0:
-            for c in choices: yield c
-        result = (yield item)
-        if result != None:
-            yield from abyss(iter(result), choices + (item,))
-    if i < 0:
-        yield sentinel
-
 class NonDeterminator:
 
     def __init__(self):
-        self.abyss = None
+        self.counters = None
+        self.choices = None
+        self.depth = None
 
     def choice(self, itr):
-        # if not isinstance(itr, Iterable): # slow, native errors still informative
-        #     raise TypeError(f"Cannot choose from non-iterable {itr}")
 
-        if self.abyss == None:
-            # if not isinstance(itr, Sized): # slow, native errors still informative
-            #     raise TypeError(f"Cannot choose from unsized iterable {itr}")
-            # if len(itr) == 0: # slow, native errors still informative
-            #     raise IndexError(f"Cannot choose from empty iterable {itr}")
+        if self.depth == None:
             return random.choice(itr)
 
-        else:
-            item = self.abyss.send(itr)
-            if item is sentinel:
-                raise IndexError(f"Cannot choose from empty iterable {itr}")
-            return item
+        if self.depth == len(self.counters):
+            self.counters.append(0)
+            self.choices.append(tuple(itr))
+
+        i = self.counters[self.depth]
+        item = self.choices[self.depth][i]
+        self.depth += 1
+        
+        return item
 
     def runs(self, f):
-        self.abyss = abyss()
-        for _ in self.abyss: yield f()
-        self.abyss = None
+        self.counters = []
+        self.choices = []
+
+        while True:
+            self.depth = 0
+            yield f()
+
+            for c in range(self.depth-1, -1, -1):
+                self.counters[c] += 1
+                if self.counters[c] < len(self.choices[c]): break
+                self.counters.pop()
+                self.choices.pop()
+            if len(self.counters) == 0: break
+
+        self.depth = None
+
     
 if __name__ == "__main__":
 
@@ -95,21 +95,18 @@ if __name__ == "__main__":
         nd.choice(1)
     except:
         tb.print_exc()
-    nd.abyss = None
 
     print("\nnd.choice([])")
     try:
         nd.choice([])
     except:
         tb.print_exc()
-    nd.abyss = None
 
     print("\nnd.choice((x for x in ()))")
     try:
         nd.choice((x for x in ()))
     except:
         tb.print_exc()
-    nd.abyss = None
 
     print("\nfn(): return nd.choice(1)")
     def fn():
@@ -118,7 +115,6 @@ if __name__ == "__main__":
         for ret in nd.runs(fn): print(ret)
     except:
         tb.print_exc()
-    nd.abyss = None
 
     print("\nfn(): return nd.choice(range(0))")
     def fn():
@@ -127,7 +123,8 @@ if __name__ == "__main__":
         for ret in nd.runs(fn): print(ret)
     except:
         tb.print_exc()
-    nd.abyss = None
+    
+    print("Thrown errors shown above")
 
     # slim-inspired test
     M = 2 # >= 3 is oom
@@ -149,4 +146,18 @@ if __name__ == "__main__":
     # for h in nd.runs(fn):
     #     print("---")
     #     for hjk in h: print("", hjk)
+
+    from time import perf_counter
+
+    def fn():
+        x = ()
+        for i in range(5):
+            x += (nd.choice(range(10)),)
+        return x
+
+    start = perf_counter()
+    for ret in nd.runs(fn):
+        pass
+    print(f"{perf_counter() - start} seconds")
+
 
