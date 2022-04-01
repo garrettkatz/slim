@@ -7,7 +7,7 @@ from sign_solve import solve
 
 np.set_printoptions(threshold=np.inf)
 
-N = 3
+N = 4
 V = np.array(tuple(it.product((-1, 1), repeat=N))).T
 print(V.shape) # (num neurons N, num verticies 2**N)
 
@@ -66,6 +66,21 @@ pt.subplot(1,3,2)
 pt.imshow(np.concatenate(weights, axis=0))
 pt.subplot(1,3,3)
 pt.plot(np.unique(weights))
+# pt.show()
+pt.close()
+
+nums = (hemis > 0).astype(int) @ 2**np.arange(2**N).reshape(-1,1)
+nums = nums.flatten()
+nums.sort()
+print(nums)
+input('.')
+print(nums[1:] - nums[:-1])
+pt.figure()
+pt.subplot(2,1,1)
+pt.plot(nums, np.ones(len(nums)), 'bo')
+pt.xlim([0, 2**(2**N)])
+pt.subplot(2,1,2)
+pt.plot(nums[1:] - nums[:-1])
 pt.show()
 
 # # exp case M ~ 2**(N-1), first kidx: is every binary integer 0 ... M-1 found in the rows of H[:,kidx]?
