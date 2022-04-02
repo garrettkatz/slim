@@ -5,27 +5,43 @@ import matplotlib.pyplot as pt
 import scipy.optimize as so
 from nondet import NonDeterminator
 
-
 # LR(W, x, y):
 # lrterms(W, x, y) -> x, W1x, sign(W2 sign(W1x)), etc
 # make each term shape (N,N) (outer products, broadcast, etc)
 # W_new[i,j] <- (stack(lrterms(W, x, y))[:,i,j] * theta[:,i,j]).sum(axis=0)
 # W_new[i] @ x = ((stack(lrterms(W, x, y))[:,i,:] * theta[:,i,:]).sum(axis=0) * x).sum()
 
-# W_new[i] @ inp[n] = (theta[t,i,j] * lrterms(W,x,y)[t,i,j] * inp[_,_,j]).sum(axes=(0,2))
-# coeff[n,t,i,j] = lrterms(W,x,y)[_,t,i,j] * inp[n,_,_,j]
+# e is edges in graph
+# for all e,i,j:
+# - out[e,i,j] * (W_new[e,i,k] * inp[e,k,j]).sum(k) <= -1
+# - out[e,i,j] * ((theta[e,t,i,k] * terms[e,t,i,k]).sum(t) * inp[e,k,j]).sum(k) <= -1
+# (- out[e,i,j] * inp[e,k,j] * terms[e,t,i,k] * theta[t,i,k]).sum(t,k) <= -1
+# (- out[e,i,j] * inp[e,k,j] * terms[e,i,t,k] * theta[i,t,k]).sum(t,k) <= -1
+
+# (- out[i,e,j,0,0] * inp[0,e,j,0,k] * terms[i,e,0,t,k] * theta[i,0,0,t,k]).sum(t,k) <= -1
 
 def fitlr(terms, inp, out)
-    # terms[t,i,j]
-    A_ub
-    
-    A_ub = np.stack([
-        -out[i](terms * inp[n]).flatten()
-    
-    b_ub = -np.ones(A_ub.shape[0])
 
-def lrterms1(W, x, y):
-    return [W, 
+    out = out.transpose(axes=(1,0,2))[:,:,:,np.newaxis,np.newaxis]
+    inp = inp.transpose(axes=(0,2,1))[np.newaxis,:,:,np.newaxis,:]
+    terms = terms.transpose(axes=(0,2,1,3))[:,:,np.newaxis,:,:] # put t after i
+
+    T, K = terms.shape[3:]
+    
+    θ = []
+    for i in range(inp.shape[0]):
+
+        A_ub = -out * inp * terms
+        A_ub = A_ub.reshape(-1, T*K)
+        b_ub = -np.ones(A_ub.shape[0])
+        c = -A_ub.mean(axis=0)
+        result = so.linprog(c, A_ub, b_ub, bounds=(None, None))#, method='simplex')
+
+        if not result.status in (0, 3): return False, θ
+        θ.append(result.x.reshape((T,K)))
+
+    θ = np.stack(θ).tranpose(axes=(1,0,2))
+    return True, θ
 
 N = 4 # number of neurons
 M = 4 # number of key-value pairs
