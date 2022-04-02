@@ -9,7 +9,7 @@ def abyss(itr=(None,), choices=()):
         if i > 0:
             for c in choices: yield c
         result = (yield item)
-        if result != None:
+        if result is not None:
             yield from abyss(iter(result), choices + (item,))
     if i < 0:
         yield sentinel
