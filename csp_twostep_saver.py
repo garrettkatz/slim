@@ -6,8 +6,9 @@ import pickle as pk
 import numpy as np
 import itertools as it
 
-N = 3 # number of neurons
+N = 4 # number of neurons
 M = 4 # number of key-value pairs
+ortho = True
 justone_soln = False
 do_check = True
 check_first = False
@@ -19,6 +20,8 @@ revert_onestep = False
 save_depth = 1
 
 save_mod = M**(M - save_depth)
+
+orth = "orth" if ortho else ""
 
 V = np.array(tuple(it.product((-1, 1), repeat=N))).T
 print("V.shape:", V.shape) # (num neurons N, num verticies 2**N)
@@ -73,6 +76,8 @@ def constrain(kidx, vidx, j, k, hidx, m1, m2, solns, justone):
 
 shattered = True
 kidx = tuple(range(M))
+if N == 4 and M == 4 and ortho: kidx = (0, 3, 5, 6)
+
 if do_csp:
     
     hidx = [np.arange(2**N) for _ in range(M)]
@@ -100,9 +105,9 @@ if do_csp:
         if (v+1) % save_mod == 0:
             vlead = "_".join(map(str, vidx[:save_depth]))
             if revert_onestep:
-                fname = f"solns/N{N}M{M}S1_{vlead}"
+                fname = f"solns/N{N}M{M}S1{orth}_{vlead}"
             else:
-                fname = f"solns/N{N}M{M}_{vlead}"
+                fname = f"solns/N{N}M{M}{orth}_{vlead}"
             with open(fname, "wb") as f: pk.dump(solns, f)
     
     print("kidx shatters:", shattered)
@@ -116,9 +121,9 @@ if do_check and shattered:
         if v % save_mod == 0:
             vlead = "_".join(map(str, vidx[:save_depth]))
             if revert_onestep:
-                fname = f"solns/N{N}M{M}S1_{vlead}"
+                fname = f"solns/N{N}M{M}S1{orth}_{vlead}"
             else:
-                fname = f"solns/N{N}M{M}_{vlead}"
+                fname = f"solns/N{N}M{M}{orth}_{vlead}"
             with open(fname, "rb") as f: solns = pk.load(f)
 
         if len(solns[vidx]) == 0:
