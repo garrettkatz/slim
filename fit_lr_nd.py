@@ -41,15 +41,29 @@ print(f"{E} edges...")
 
 nd = NonDeterminator()
 
-def lrterms_fser(W, x, y):
+# # FSER
+# def lrterms(W, x, y):
+#     x = x.reshape(-1, 1)
+#     y = y.reshape(-1, 1)
+#     h = np.sign(W[0] @ x)
+#     z = np.sign(W[1] @ h)
+#     terms1 = W[0][np.newaxis]
+#     terms2 = np.stack((W[1], y * h.T, z * h.T))
+#     return terms1, terms2
+# T0, T1 = 1, 3
+
+# CHL
+def lrterms(W, x, y):
     x = x.reshape(-1, 1)
     y = y.reshape(-1, 1)
     h = np.sign(W[0] @ x)
     z = np.sign(W[1] @ h)
-    terms1 = W[0][np.newaxis]
-    terms2 = np.stack((W[1], y * h.T, z * h.T))
-    return terms1, terms2
-T0, T1 = 1, 3
+    u = np.sign(W[1].T @ y)
+    v = np.sign(W[0].T @ u)
+    terms0 = np.stack((W[0], h * x.T, u * x.T, h * v.T, u * v.T))
+    terms1 = np.stack((W[1], y * h.T, z * h.T, y * u.T, z * u.T))
+    return terms0, terms1
+T0, T1 = 5, 5
 
 def checkfit():
     W = {}
@@ -67,7 +81,7 @@ def checkfit():
     e = 0
     for vidx in it.product(kidx, repeat=M):        
         for (j,k) in it.product(range(M), repeat=2):
-            terms[0][e], terms[1][e] = lrterms_fser(W[vidx], V[:,kidx[j]], V[:,kidx[k]])
+            terms[0][e], terms[1][e] = lrterms(W[vidx], V[:,kidx[j]], V[:,kidx[k]])
             targ_vidxs.append(vidx[:j] + (kidx[k],) + vidx[j+1:])
             e += 1
     # solve theta
@@ -101,7 +115,7 @@ def checkfit_progressive():
 
         # enumerate edges
         for (j,k) in it.product(range(M), repeat=2):
-            terms[0][e], terms[1][e] = lrterms_fser(W[vidx], V[:,kidx[j]], V[:,kidx[k]])
+            terms[0][e], terms[1][e] = lrterms(W[vidx], V[:,kidx[j]], V[:,kidx[k]])
             new_vidx = vidx[:j] + (kidx[k],) + vidx[j+1:]
             targ_vidxs.append(new_vidx)
             
@@ -165,7 +179,7 @@ for t in range(100):
     j,k = np.random.choice(M, size=2)
     x = V[:,kidx[j]]
     y = V[:,kidx[k]]
-    terms = lrterms_fser(w, x, y)
+    terms = lrterms(w, x, y)
     w = tuple((terms[l] * θ[l]).sum(axis=0) for l in (0,1))
     vidx = vidx[:j] + (kidx[k],) + vidx[j+1:]
 
