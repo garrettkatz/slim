@@ -7,7 +7,7 @@ from sign_solve import solve
 
 np.set_printoptions(threshold=np.inf)
 
-N = 4
+N = 2
 V = np.array(tuple(it.product((-1, 1), repeat=N))).T
 print(V.shape) # (num neurons N, num verticies 2**N)
 
@@ -59,6 +59,9 @@ print((hemis < 0).any(axis=1) & (hemis > 0).any(axis=1))
 print((hemis < 0).sum(axis=1))
 print((hemis > 0).sum(axis=1))
 
+print("rounded weights:")
+print(np.concatenate(weights, axis=0).round())
+
 import matplotlib.pyplot as pt
 pt.subplot(1,3,1)
 pt.imshow(hemis)
@@ -66,7 +69,7 @@ pt.subplot(1,3,2)
 pt.imshow(np.concatenate(weights, axis=0))
 pt.subplot(1,3,3)
 pt.plot(np.unique(weights))
-# pt.show()
+pt.show()
 pt.close()
 
 nums = (hemis > 0).astype(int) @ 2**np.arange(2**N).reshape(-1,1)
