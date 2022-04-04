@@ -6,9 +6,9 @@ import pickle as pk
 import numpy as np
 import itertools as it
 
-N = 4 # number of neurons
-M = 4 # number of key-value pairs
-ortho = True
+N = 3 # number of neurons
+M = 3 # number of key-value pairs
+ortho = False
 justone_soln = False
 do_check = True
 check_first = False
@@ -17,7 +17,7 @@ check_random = True
 do_csp = True
 verbose = True
 revert_onestep = False
-save_depth = 1
+save_depth = 0
 
 save_mod = M**(M - save_depth)
 

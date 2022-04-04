@@ -8,15 +8,20 @@ from nondet_sized import NonDeterminator
 
 rerun = True
 
-# N = 2 # number of neurons
-# M = 2 # number of key-value pairs
-# ortho = False
-# save_depth = 0
+N = 3 # number of neurons
+M = 3 # number of key-value pairs
+ortho = False
+save_depth = 0
 
-N = 4 # number of neurons
-M = 4 # number of key-value pairs
-ortho = True
-save_depth = 1
+# N = 3 # number of neurons
+# M = 4 # number of key-value pairs
+# ortho = False
+# save_depth = 1
+
+# N = 4 # number of neurons
+# M = 4 # number of key-value pairs
+# ortho = True
+# save_depth = 1
 
 orth = "orth" if ortho else ""
 
@@ -50,29 +55,29 @@ print(f"{E} edges...")
 
 nd = NonDeterminator()
 
-# FSER
-def lrterms(W, x, y):
-    x = x.reshape(-1, 1)
-    y = y.reshape(-1, 1)
-    h = np.sign(W[0] @ x)
-    z = np.sign(W[1] @ h)
-    terms1 = W[0][np.newaxis]
-    terms2 = np.stack((W[1], y * h.T, z * h.T))
-    return terms1, terms2
-T0, T1 = 1, 3
-
-# # CHL
+# # FSER
 # def lrterms(W, x, y):
 #     x = x.reshape(-1, 1)
 #     y = y.reshape(-1, 1)
 #     h = np.sign(W[0] @ x)
 #     z = np.sign(W[1] @ h)
-#     u = np.sign(W[1].T @ y)
-#     v = np.sign(W[0].T @ u)
-#     terms0 = np.stack((W[0], h * x.T, u * x.T, h * v.T, u * v.T))
-#     terms1 = np.stack((W[1], y * h.T, z * h.T, y * u.T, z * u.T))
-#     return terms0, terms1
-# T0, T1 = 5, 5
+#     terms1 = W[0][np.newaxis]
+#     terms2 = np.stack((W[1], y * h.T, z * h.T))
+#     return terms1, terms2
+# T0, T1 = 1, 3
+
+# CHL
+def lrterms(W, x, y):
+    x = x.reshape(-1, 1)
+    y = y.reshape(-1, 1)
+    h = W[0] @ x
+    z = W[1] @ np.sign(h)
+    u = W[1].T @ y
+    v = W[0].T @ np.sign(u)
+    terms0 = np.stack((W[0], h * x.T, u * x.T, h * v.T, u * v.T))
+    terms1 = np.stack((W[1], y * h.T, z * h.T, y * u.T, z * u.T))
+    return terms0, terms1
+T0, T1 = 5, 5
 
 def checkfit():
     W = {}
@@ -177,7 +182,7 @@ if rerun:
     # for r, (success, θ, W, max_residual) in enumerate(nd.runs(checkfit)):
     for r, (success, θ, W, max_residual) in enumerate(nd.runs(checkfit_progressive)):
 
-        ctr = " ".join(f"{co}/{len(ch)}" for co,ch in zip(nd.counters, nd.choices) if len(ch) > 1)
+        ctr = " ".join(f"{c}:{co}/{len(ch)}" for c,(co,ch) in enumerate(zip(nd.counters, nd.choices)) if len(ch) > 1)
         print(f"run {r} [max_res={max_residual:.3f}]: {ctr}")
         if success:
             with open(f"fitlr_{N}_{M}.pkl", "wb") as f: pk.dump((θ, W), f)
