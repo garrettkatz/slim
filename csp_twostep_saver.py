@@ -32,8 +32,12 @@ fname = f"hemis_{N}.npy"
 with open(fname,"rb") as f: weights, H = pk.load(f)
 print("H.shape:", H.shape) # (num_dichotomies, num vertices = 2**N)
 
+kidx = tuple(range(M))
+if N == 4 and M == 4 and ortho: kidx = (0, 3, 5, 6)
+
 if uni_version:
-    H_uni, uni_idx = np.unique(H[:,:M], axis=0, return_index=True)
+    # H_uni, uni_idx = np.unique(H[:,:M], axis=0, return_index=True)
+    H_uni, uni_idx = np.unique(H[:,kidx], axis=0, return_index=True)
     W_uni = np.array(weights)[uni_idx]
 
 def propagate_contraints(m1, m2, k, h, v):
@@ -52,7 +56,7 @@ def constrain(kidx, vidx, j, k, hidx, m1, m2, solns, justone):
         # propagate m constraints
         for i in range(N):
             if uni_version:
-                m1[i] = m1[i][H_uni[m1[i], kidx[j]] == V[i, hidx[j]]]
+                m1[i] = m1[i][H_uni[m1[i], j] == V[i, hidx[j]]]
             else:
                 m1[i] = m1[i][H[m1[i], kidx[j]] == V[i, hidx[j]]]
             if len(m1[i]) == 0: return False # unsatisfiable
@@ -84,8 +88,6 @@ def constrain(kidx, vidx, j, k, hidx, m1, m2, solns, justone):
     return any_solved
 
 shattered = True
-kidx = tuple(range(M))
-if N == 4 and M == 4 and ortho: kidx = (0, 3, 5, 6)
 
 if do_csp:
     
