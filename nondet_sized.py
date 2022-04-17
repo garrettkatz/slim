@@ -40,6 +40,9 @@ class NonDeterminator:
 
         self.depth = None
 
+    def counter_string(self):
+        return " ".join(f"{c}:{co}/{len(ch)}"
+            for c,(co,ch) in enumerate(zip(self.counters, self.choices)) if len(ch) > 1)
     
 if __name__ == "__main__":
 
