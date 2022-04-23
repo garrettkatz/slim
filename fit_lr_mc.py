@@ -2,7 +2,11 @@ import pickle as pk
 import random as rd
 import itertools as it
 import numpy as np
+import scipy.sparse as sp
+import scipy.optimize as so
 from nondet_sized import NonDeterminator
+
+# rd.seed(20000)
 
 N = 2
 M = 2
@@ -10,26 +14,30 @@ M = 2
 kidx = tuple(range(M))
 
 # build first M hypercube vertices
-C = np.empty((N, M), dtype=int)
-for m,v in enumerate(it.product((-1, 1), repeat=N)):
-    if m == M: break
-    C[:,m] = v
+# C = np.empty((N, M), dtype=int)
+# for m,v in enumerate(it.product((-1, 1), repeat=N)):
+#     if m == M: break
+#     C[:,m] = v
 
-with open(f"hemis_{N}.npy", "rb") as f: _, H = pk.load(f)
-H_uni = np.unique(H[:,kidx], axis=0)
+C = np.array(tuple(it.product((-1, +1), repeat=N))).T
+
+with open(f"hemis_{N}.npy", "rb") as f: _, hemis = pk.load(f)
+chots = np.unique(hemis[:,kidx], axis=0)
+
+with open(f"vmap_{N}_{M}.pkl", "rb") as f: vidx_map = pk.load(f)
 
 num_paths = 2
-path_length = 2 # number of vidx nodes in path
+path_length = 3 # number of vidx nodes in path
 
-print("Sizing")
-print(f"V: num_paths*path_length*3*N*M = {num_paths}*{path_length}*3*{N}*{M} = {num_paths*path_length*3*N*M}")
+# print("Sizing")
+# print(f"V: num_paths*path_length*3*N*M = {num_paths}*{path_length}*3*{N}*{M} = {num_paths*path_length*3*N*M}")
 
-def one_to_many(inp, out):
-    mapping = {}
-    for x, y in zip(inp, out):
-        if mapping.get(x, y) != y: return True
-        mapping[x] = y
-    return False
+# def one_to_many(inp, out):
+#     mapping = {}
+#     for x, y in zip(inp, out):
+#         if mapping.get(x, y) != y: return True
+#         mapping[x] = y
+#     return False
 
 # mc sample paths to a given depth
 paths = []
@@ -45,43 +53,229 @@ for p in range(num_paths):
     paths.append((nodes, edges))
         
 # search combinatorial variable bindings
+
+# Layer activations
+X = np.empty((num_paths, path_length, N, M), dtype=int) # forward input layer activities
+H = np.empty((num_paths, path_length, N, M), dtype=int) # forward hidden layer activities
+V = np.empty((num_paths, path_length, N, M), dtype=int) # forward output layer activities
+Y = np.empty((num_paths, path_length-1, N), dtype=int) # backward output activity
+Z = np.empty((num_paths, path_length-1, N), dtype=int) # backward hidden activity
+U = np.empty((num_paths, path_length-1, N), dtype=int) # backward input activity
+
 nd = NonDeterminator()
 def combind():
 
-    # Choose layer activations
-    V = np.empty((num_paths, path_length, 3, N, M), dtype=int) # 3 = 1 hidden layer + 2 backward layers
+    pn = []
+
     for p, (nodes, edges) in enumerate(paths):
+
         for n, vidx in enumerate(nodes):
 
-            # choose hemichotomies for forward hidden layer
+            pn.append((p, n))
+
+            # forward
+
+            # set input activities
+            X[p, n] = C[:, kidx]
+
+            # choose hidden activities
+            rows = ()
             for i in range(N):
-                r = nd.choice(range(H_uni.shape[0]))
-                V[p, n, 0, i] = H_uni[r]
+                row = nd.choice(vidx_map[vidx, rows])
+                rows += (row,)
+                H[p, n, i] = chots[row]
 
-            # abort if hidx -> vidx is one-to-many
-            hidx = 2**np.arange(N-1,-1,-1) @ V[p, n, 0]
-            if one_to_many(hidx, vidx): return False
+            # set output activities
+            V[p, n] = C[:, vidx]
 
-            # abort if any hidx -> vidx row is a non-feasible hemichotomy
-            for i in range(N):
-                if not (H[:,hidx] == C[i,vidx]).all(axis=1).any(): return False
-
-            # choose hemichotomies for backward hidden layer
-            H_uni_vidx = np.unique(H_uni[:,vidx], axis=0)
-            for i in range(N):
-                r = nd.choice(range(H_uni_vidx.shape[0]))
-                V[p, n, 1, i] = H_uni_vidx[r]
-
-            # choose hemichotomies for backward input layer
-            bidx = 2**np.arange(N-1,-1,-1) @ V[p, n, 1]
-            H_uni_bidx = np.unique(H[:, bidx], axis=0)
-            for i in range(N):
-                r = nd.choice(range(H_uni_bidx.shape[0]))
-                V[p, n, 2, i] = H_uni_bidx[r]
-
-    # Form linprog data
-    # TODO
+            # backward
+            if n < len(edges):
+                _, k = edges[n]
     
-# for _ in nd.runs(combind):
-#     print(nd.counter_string())
+                # set output activity
+                Y[p, n] = C[:, kidx[k]]
+    
+                # choose hidden activity
+                Z[p, n] = C[:, nd.choice(range(2**N))]
+    
+                # choose input activity
+                U[p, n] = C[:, nd.choice(range(2**N))]
+
+            # linprog
+            if n == 0: continue # collect at least one transition in each path before linprog
+
+            forward = (X, H, V)
+            backward = (U, Z, Y)
+
+            # forward constraints
+            for layer in range(2):
+                fi, fo = forward[layer], forward[layer+1]
+                bi, bo = backward[layer], backward[layer+1]
+                for i in range(N):
+                    blocks = [ -(fi[_p, _n] * fo[_p, _n, i]).T for (_p, _n) in pn] + [np.zeros((0, N*4))] # 4*N term columns
+                    A_ub = sp.block_diag(blocks)
+                    b_ub = -np.ones(A_ub.shape[0])
+                    c = -A_ub.mean(axis=0)
+    
+                    blocks = [[None for _ in range(len(pn) + 4)] for  _ in range(len(pn))]
+                    b_eq = np.zeros(len(pn) * N)
+                    for b, (_p, _n) in enumerate(pn):
+                        blocks[b][b] = sp.eye(N)
+                        if _n == 0:
+                            b_eq[b*N + i] = 1
+                        else:
+                            _, edges_p = paths[_p]
+                            j,_ = edges_p[_n-1]
+                            blocks[b][b-1] = -sp.eye(N)
+                            blocks[b][-1] = sp.diags(fo[_p,_n-1,i,j] * fi[_p,_n-1,:,j])
+                            blocks[b][-2] = sp.diags(fo[_p,_n-1,i,j] * bi[_p,_n-1])
+                            blocks[b][-3] = sp.diags(bo[_p,_n-1,i] * fi[_p,_n-1,:,j])
+                            blocks[b][-4] = sp.diags(bo[_p,_n-1,i] * bi[_p,_n-1])
+                    A_eq = sp.bmat(blocks)
+    
+                    res = so.linprog(c, A_ub, b_ub, A_eq, b_eq, bounds=(None, None))
+                    if not res.success:
+                        # print(p, n, i, f"fwd layer {layer} fail")
+                        return False
+                # print(p, n, f"fwd layer {layer} success")
+
+            if n == 1: continue # collect at least two transitions before backward linprog
+
+            # backward constraints
+            for layer in range(2):
+                fi, fo = forward[layer], forward[layer+1]
+                bi, bo = backward[layer], backward[layer+1]
+                for i in range(N):
+                    blocks = [ -(bo[_p, _n] * bi[_p, _n, i]).reshape(1,-1) for (_p, _n) in pn if _n < path_length-1] + [np.zeros((0, N*4))] # 4*N term columns
+                    A_ub = sp.block_diag(blocks)
+                    b_ub = -np.ones(A_ub.shape[0])
+                    c = -A_ub.mean(axis=0)
+                    
+                    nb = len(pn) - (p+1) # omit last node of every path
+                    blocks = [[None for _ in range(nb + 4)] for  _ in range(nb)]
+                    b_eq = np.zeros(nb * N)
+                    b = 0
+                    for (_p, _n) in pn:
+                        if _n == path_length -1: continue
+                        blocks[b][b] = sp.eye(N)
+                        if _n == 0:
+                            b_eq[b*N + i] = 1
+                        else:
+                            _, edges_p = paths[_p]
+                            j,_ = edges_p[_n-1]
+                            blocks[b][b-1] = -sp.eye(N)
+                            blocks[b][-1] = sp.diags(fi[_p,_n-1,i,j] * fo[_p,_n-1,:,j])
+                            blocks[b][-2] = sp.diags(fi[_p,_n-1,i,j] * bo[_p,_n-1])
+                            blocks[b][-3] = sp.diags(bi[_p,_n-1,i] * fo[_p,_n-1,:,j])
+                            blocks[b][-4] = sp.diags(bi[_p,_n-1,i] * bo[_p,_n-1])
+                        b += 1
+                    A_eq = sp.bmat(blocks)
+
+                    res = so.linprog(c, A_ub, b_ub, A_eq, b_eq, bounds=(None, None))
+                    if not res.success:
+                        # print(p, n, i, f"bkwd layer {layer} fail")
+                        return False
+                # print(p, n, f"bkwd layer {layer} success")
+
+            # # (inp,out), ( term pairs )
+            # target_data = [
+            #     ((X, H), ((H, X), (H, U), (Z, X), (Z, U))), # forward first layer
+            #     ((H, V), ((V, H), (V, Z), (Y, H), (Y, Z))), # forward second layer
+            # ]
+
+            # for layer, ((inp, out), terms) in enumerate(target_data):
+
+            #     for i in range(N):
+            #         blocks = [ -(inp[_p, _n] * out[_p, _n, i]).T for (_p, _n) in pn] + [np.zeros((0, N*4))] # 4*N term columns
+            #         A_ub = sp.block_diag(blocks)
+            #         b_ub = -np.ones(A_ub.shape[0])
+            #         c = -A_ub.mean(axis=0)
+    
+            #         blocks = [[None for _ in range(len(pn) + 4)] for  _ in range(len(pn))]
+            #         b_eq = np.zeros(len(pn) * N)
+            #         for b, (_p, _n) in enumerate(pn):
+            #             blocks[b][b] = sp.eye(N)
+            #             if _n == 0:
+            #                 b_eq[b*N + i] = 1
+            #             else:
+            #                 _, edges_p = paths[_p]
+            #                 j,_ = edges_p[_n-1]
+            #                 blocks[b][b-1] = -sp.eye(N)
+            #                 blocks[b][-1] = sp.diags(terms[0][0][_p,_n-1,i,j] * terms[0][1][_p,_n-1,:,j])
+            #                 blocks[b][-2] = sp.diags(terms[1][0][_p,_n-1,i,j] * terms[1][1][_p,_n-1])
+            #                 blocks[b][-3] = sp.diags(terms[2][0][_p,_n-1,i] * terms[2][1][_p,_n-1,:,j])
+            #                 blocks[b][-4] = sp.diags(terms[3][0][_p,_n-1,i] * terms[3][1][_p,_n-1])
+            #         A_eq = sp.bmat(blocks)
+    
+            #         res = so.linprog(c, A_ub, b_ub, A_eq, b_eq, bounds=(None, None))
+            #         if not res.success:
+            #             print(p, n, f"layer {layer} fail")
+            #             return False
+            #     print(p, n, f"layer {layer} success")
+
+            # # forward first layer lr terms: (h,z) x (x,u) ~ 4
+            # for i in range(N):
+            #     blocks = [ -(X[_p, _n] * H[_p, _n, i]).T for (_p, _n) in pn] + [np.zeros((0, N*4))] # 4*N term columns
+            #     A_ub = sp.block_diag(blocks)
+            #     b_ub = -np.ones(A_ub.shape[0])
+            #     c = -A_ub.mean(axis=0)
+
+            #     blocks = [[None for _ in range(len(pn) + 4)] for  _ in range(len(pn))]
+            #     b_eq = np.zeros(len(pn) * N)
+            #     for b, (_p, _n) in enumerate(pn):
+            #         blocks[b][b] = sp.eye(N)
+            #         if _n == 0:
+            #             b_eq[b*N + i] = 1
+            #         else:
+            #             _, edges_p = paths[_p]
+            #             j,_ = edges_p[_n-1]
+            #             blocks[b][b-1] = -sp.eye(N)
+            #             blocks[b][-1] = sp.diags(H[_p,_n-1,i,j] * X[_p,_n-1,:,j])
+            #             blocks[b][-2] = sp.diags(H[_p,_n-1,i,j] * U[_p,_n-1])
+            #             blocks[b][-3] = sp.diags(Z[_p,_n-1,i] * X[_p,_n-1,:,j])
+            #             blocks[b][-4] = sp.diags(Z[_p,_n-1,i] * U[_p,_n-1])
+            #     A_eq = sp.bmat(blocks)
+
+            #     res = so.linprog(c, A_ub, b_ub, A_eq, b_eq, bounds=(None, None))
+            #     if not res.success:
+            #         print(p,n,"forward 1 fail")
+            #         return False
+            # print(p,n,"forward 1 success")
+
+            # # forward second layer lr terms: (v,y) x (h,z) ~ 4
+            # for i in range(N):
+            #     blocks = [ -(H[_p, _n] * V[_p, _n, i]).T for (_p, _n) in pn] + [np.zeros((0, N*4))] # 4*N term columns
+            #     A_ub = sp.block_diag(blocks)
+            #     b_ub = -np.ones(A_ub.shape[0])
+            #     c = -A_ub.mean(axis=0)
+
+            #     blocks = [[None for _ in range(len(pn) + 4)] for  _ in range(len(pn))]
+            #     b_eq = np.zeros(len(pn) * N)
+            #     for b, (_p, _n) in enumerate(pn):
+            #         blocks[b][b] = sp.eye(N)
+            #         if _n == 0:
+            #             b_eq[b*N + i] = 1
+            #         else:
+            #             _, edges_p = paths[_p]
+            #             j,_ = edges_p[_n-1]
+            #             blocks[b][b-1] = -sp.eye(N)
+            #             blocks[b][-1] = sp.diags(V[_p,_n-1,i,j] * H[_p,_n-1,:,j])
+            #             blocks[b][-2] = sp.diags(V[_p,_n-1,i,j] * Z[_p,_n-1])
+            #             blocks[b][-3] = sp.diags(Y[_p,_n-1,i] * H[_p,_n-1,:,j])
+            #             blocks[b][-4] = sp.diags(Y[_p,_n-1,i] * Z[_p,_n-1])
+            #     A_eq = sp.bmat(blocks)
+
+            #     res = so.linprog(c, A_ub, b_ub, A_eq, b_eq, bounds=(None, None))
+            #     if not res.success:
+            #         print(p,n,"forward 2 fail")
+            #         return False
+            # print(p,n,"forward 2 success")
+
+    return True
+
+
+for i,success in enumerate(nd.runs(combind)):
+    # if i % 1000 == 0: print(i, nd.counter_string())
+    print(i, success, nd.counter_string())
+    if success: break
 
