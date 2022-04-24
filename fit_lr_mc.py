@@ -27,7 +27,7 @@ chots = np.unique(hemis[:,kidx], axis=0)
 with open(f"vmap_{N}_{M}.pkl", "rb") as f: vidx_map = pk.load(f)
 
 num_paths = 2
-path_length = 3 # number of vidx nodes in path
+path_length = 3 # number of vidx nodes in path, must be > 2 for backward linprog
 
 # print("Sizing")
 # print(f"V: num_paths*path_length*3*N*M = {num_paths}*{path_length}*3*{N}*{M} = {num_paths*path_length*3*N*M}")
@@ -110,6 +110,8 @@ def combind():
             forward = (X, H, V)
             backward = (U, Z, Y)
 
+            solns = {}
+
             # forward constraints
             for layer in range(2):
                 fi, fo = forward[layer], forward[layer+1]
@@ -139,7 +141,9 @@ def combind():
                     res = so.linprog(c, A_ub, b_ub, A_eq, b_eq, bounds=(None, None))
                     if not res.success:
                         # print(p, n, i, f"fwd layer {layer} fail")
-                        return False
+                        return False, solns
+                    else:
+                        solns["f", layer, i] = res.x
                 # print(p, n, f"fwd layer {layer} success")
 
             if n == 1: continue # collect at least two transitions before backward linprog
@@ -177,15 +181,19 @@ def combind():
                     res = so.linprog(c, A_ub, b_ub, A_eq, b_eq, bounds=(None, None))
                     if not res.success:
                         # print(p, n, i, f"bkwd layer {layer} fail")
-                        return False
+                        return False, solns
+                    else:
+                        solns["b", layer, i] = res.x
                 # print(p, n, f"bkwd layer {layer} success")
 
-    return True
+    return True, solns
 
-
-for i,success in enumerate(nd.runs(combind)):
+for i, (success, solns) in enumerate(nd.runs(combind)):
     # if i % 1000 == 0: print(i, nd.counter_string())
     print(i, success, nd.counter_string())
     if success: break
     # if i == 300: break
+
+with open(f"lr_{N}_{M}.pkl", "wb") as f:
+    pk.dump((solns, paths), f)
 
