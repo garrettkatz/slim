@@ -8,8 +8,8 @@ from nondet_sized import NonDeterminator
 
 # rd.seed(20000)
 
-N = 2
-M = 2
+N = 3
+M = 4
 
 kidx = tuple(range(M))
 

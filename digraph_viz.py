@@ -1,11 +1,12 @@
+import random as rd
 import pickle as pk
 import itertools as it
 import numpy as np
 import matplotlib.pyplot as pt
 from nondet_sized import NonDeterminator
 
-N = 2 # number of neurons
-M = 2 # number of key-value pairs
+N = 3 # number of neurons
+M = 4 # number of key-value pairs
 
 with open(f"hemis_{N}.npy", "rb") as f: weights, hemis = pk.load(f)
 print("hemis.shape:", hemis.shape) # (num_dichotomies, num vertices = 2**N)
@@ -26,7 +27,7 @@ print(f"{E} edges...")
 
 pt.ion()
 # fig, axs = pt.subplots(nrows=N, ncols=4, sharex='col')
-fig, axs = pt.subplots(nrows=1, ncols=2)
+fig, axs = pt.subplots(nrows=2, ncols=1)
 
 vidx = kidx
 
@@ -55,11 +56,17 @@ while True:
             KWH[i,M+1:M+N+1] = whits[rows[i]]
             KWH[i,-M:] = chots[rows[i]]
 
-        WVV = np.nan * np.ones((N, N + 1 + M + 1 + M))
-        WVV[:,-N:] = C[:,vidx]
+        HWV = np.nan * np.ones((N, M + 1 + N + 1 + M))
+        HWV[:,:M] = C[:,hidx]
         for i in range(N):
-            WVV[i,:N] = hwhits[outs[i]]
-            WVV[i,N+1:N+M+1] = hchots[outs[i]]
+            HWV[i,M+1:M+N+1] = hwhits[outs[i]]
+            HWV[i,-M:] = hchots[outs[i]]
+
+        # WVV = np.nan * np.ones((N, N + 1 + M + 1 + M))
+        # WVV[:,-M:] = C[:,vidx]
+        # for i in range(N):
+        #     WVV[i,:N] = hwhits[outs[i]]
+        #     WVV[i,N+1:N+M+1] = hchots[outs[i]]
 
         axs[0].clear()
         axs[1].clear()
@@ -70,22 +77,26 @@ while True:
         for (i,j) in it.product(range(N), repeat=2):
             axs[0].text(M+j+.75,i+.25,int(KWH[i,M+1+j]), color='red')
 
-        axs[1].imshow(WVV)
-        axs[1].set_title("W1, V, V")
+        axs[1].imshow(HWV)
+        axs[1].set_title("H, W1, V")
 
         for (i,j) in it.product(range(N), repeat=2):
-            axs[1].text(j-.25,i+.25,int(WVV[i,j]), color='red')
+            axs[1].text(M+j+.75,i+.25,int(HWV[i,M+1+j]), color='red')
+            # axs[1].text(j-.25,i+.25,int(WVV[i,j]), color='red')
 
         print(f"vidx: {vidx}, soln {r} of {soln_counts[vidx]}")
-        cmd = input('next [s]oln, next [v]idx: ')
+        # cmd = input('next [s]oln, next [v]idx: ')
         cmd = 's'
-        # pt.pause(0.1)
+        pt.pause(0.01)
 
         if cmd == 's': continue
         if cmd == 'v': break
 
-    j = int(input(f"Key to remap (0-{M-1}): ")) % M
-    k = int(input(f"New value (0-{M-1}): ")) % M
+    # j = int(input(f"Key to remap (0-{M-1}): ")) % M
+    # k = int(input(f"New value (0-{M-1}): ")) % M
+
+    j = rd.choice(kidx)
+    k = rd.choice(kidx[:vidx[j]] + kidx[vidx[j]+1:])
 
     vidx = vidx[:j] + (k,) + vidx[j+1:]
 
