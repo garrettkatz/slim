@@ -6,15 +6,15 @@ import pickle as pk
 import numpy as np
 import itertools as it
 
-N = 4 # number of neurons
+N = 3 # number of neurons
 M = 4 # number of key-value pairs
-ortho = True
+ortho = False
 justone_soln = False
 do_check = True
 check_first = False
 check_all = False
 check_random = True
-do_csp = True
+do_csp = False
 verbose = True
 revert_onestep = False
 uni_version = True

@@ -5,16 +5,18 @@ import numpy as np
 import itertools as it
 from nondet_sized import NonDeterminator
 
-N = 2
-M = 2
+N = 3
+M = 4
+
+recalc = True
 
 C = np.array(tuple(it.product((-1,+1), repeat=N))).T
 
 with open(f"hemis_{N}.npy","rb") as f: _, hemis = pk.load(f)
 chots = np.unique(hemis[:,:M], axis=0)
 
-if os.path.exists(f"vmap_{N}_{M}.pkl"):
-    with open(f"vmap_{N}_{M}.pkl","rb") as f: vidx_map = pk.load(f)
+if os.path.exists(f"vmap_{N}_{M}.pkl") and not recalc:
+    with open(f"vmap_{N}_{M}.pkl","rb") as f: vidx_map, soln_counts = pk.load(f)
 else:
 
     vidx_map = {}
@@ -30,25 +32,38 @@ else:
         vidx = tuple(2**np.arange(N-1,-1,-1) @ (V > 0))
     
         if max(vidx) >= M: return
+
+        if vidx not in vidx_map: vidx_map[vidx] = {}
     
         for i in range(N):
-            lookup = (vidx, tuple(rows[:i]))
-            if lookup not in vidx_map: vidx_map[lookup] = []
-            vidx_map[lookup].append(rows[i])
+            lookup = tuple(rows[:i])
+            if lookup not in vidx_map[vidx]: vidx_map[vidx][lookup] = []
+            if rows[i] not in vidx_map[vidx][lookup]: vidx_map[vidx][lookup].append(rows[i])
     
     for i,_ in enumerate(nd.runs(fill_map)):
         if i % 1000 == 0: print(i, nd.counter_string())
 
-    with open(f"vmap_{N}_{M}.pkl","wb") as f: pk.dump(vidx_map, f)
+    # num solns for each vidx
+    soln_counts = {}
+    for vidx in it.product(range(M), repeat=M):
+        num_solns = sum(len(vidx_map[vidx][key]) for key in vidx_map[vidx] if len(key) == N-1)
+        soln_counts[vidx] = num_solns
 
-print(f"{len(vidx_map)} lookups")
+    with open(f"vmap_{N}_{M}.pkl","wb") as f: pk.dump((vidx_map, soln_counts), f)
+
+print(f"{len(vidx_map)} vidxs = M**M = {M**M}")
+print(f"{sum(map(len,vidx_map.values()))} total lookups")
+
+for vidx in it.product(range(M), repeat=M):
+    print(vidx, soln_counts[vidx])
+print(f"{sum(soln_counts.values())} distinct solns across all vidx, {min(soln_counts.values())}-{max(soln_counts.values())}")
 
 # check
 for rep in range(10):
     vidx = tuple(random.choices(range(M), k=M))
     rows = ()
     while len(rows) < N:
-        rows += (random.choice(vidx_map[vidx, rows]),)
+        rows += (random.choice(vidx_map[vidx][rows]),)
     H = np.array([chots[r] for r in rows])
     hidx = tuple(2**np.arange(N-1,-1,-1) @ (H > 0))
     

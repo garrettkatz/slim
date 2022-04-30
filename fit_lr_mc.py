@@ -8,8 +8,8 @@ from nondet_sized import NonDeterminator
 
 # rd.seed(20000)
 
-N = 3
-M = 4
+N = 2
+M = 2
 
 kidx = tuple(range(M))
 
@@ -24,7 +24,7 @@ C = np.array(tuple(it.product((-1, +1), repeat=N))).T
 with open(f"hemis_{N}.npy", "rb") as f: _, hemis = pk.load(f)
 chots = np.unique(hemis[:,kidx], axis=0)
 
-with open(f"vmap_{N}_{M}.pkl", "rb") as f: vidx_map = pk.load(f)
+with open(f"vmap_{N}_{M}.pkl", "rb") as f: vidx_map, _ = pk.load(f)
 
 num_paths = 2
 path_length = 3 # number of vidx nodes in path, must be > 2 for backward linprog
@@ -81,7 +81,7 @@ def combind():
             # choose hidden activities
             rows = ()
             for i in range(N):
-                row = nd.choice(vidx_map[vidx, rows])
+                row = nd.choice(vidx_map[vidx][rows])
                 rows += (row,)
                 H[p, n, i] = chots[row]
 
