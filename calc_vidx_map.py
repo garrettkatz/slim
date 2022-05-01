@@ -29,12 +29,17 @@ else:
         hidx = tuple(2**np.arange(N-1,-1,-1) @ (H > 0))
 
         if hidx not in hchot_memo:
-            hchot_memo[hidx] = np.unique(hemis[:,hidx], axis=0)
+            hchot_memo[hidx] = (np.unique(hemis[:,hidx], axis=0) > 0).astype(int)
         hchots = hchot_memo[hidx]
-        V = np.array([hchots[nd.choice(range(hchots.shape[0]))] for i in range(N)])
-        vidx = tuple(2**np.arange(N-1,-1,-1) @ (V > 0))
-    
-        if max(vidx) >= M: return
+
+        vidx = np.zeros(M, dtype=int)
+        for i in range(N):
+            vidx_inc = hchots * 2**(N-i-1) + vidx
+            choices = np.flatnonzero((vidx_inc < M).all(axis=1))
+            if len(choices) == 0: return
+            vidx = vidx_inc[nd.choice(choices)]
+
+        vidx = tuple(vidx)
 
         if vidx not in vidx_map: vidx_map[vidx] = {}
     
