@@ -5,8 +5,8 @@ import numpy as np
 import itertools as it
 from nondet_sized import NonDeterminator
 
-N = 3
-M = 4
+N = 4
+M = 5
 
 recalc = True
 
@@ -20,14 +20,17 @@ if os.path.exists(f"vmap_{N}_{M}.pkl") and not recalc:
 else:
 
     vidx_map = {}
+    hchot_memo = {}
     
     nd = NonDeterminator()
     def fill_map():
         rows = [nd.choice(range(chots.shape[0])) for i in range(N)]
         H = np.array([chots[r] for r in rows])
         hidx = tuple(2**np.arange(N-1,-1,-1) @ (H > 0))
-    
-        hchots = np.unique(hemis[:,hidx], axis=0)
+
+        if hidx not in hchot_memo:
+            hchot_memo[hidx] = np.unique(hemis[:,hidx], axis=0)
+        hchots = hchot_memo[hidx]
         V = np.array([hchots[nd.choice(range(hchots.shape[0]))] for i in range(N)])
         vidx = tuple(2**np.arange(N-1,-1,-1) @ (V > 0))
     
