@@ -2,6 +2,7 @@ import numpy as np
 import scipy.optimize as so
 
 def solve(X, Y):
+    # sign(W @ X) = Y
     # sign(X.T @ W.T) == Y.T
     #   Y.T[:,i] * X.T @ W[i,:].T > 0
     # - Y.T[:,i] * X.T @ W[i,:].T <= -1
