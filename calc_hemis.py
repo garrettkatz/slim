@@ -7,7 +7,7 @@ from sign_solve import solve
 
 np.set_printoptions(threshold=np.inf)
 
-N = 3
+N = 4
 V = np.array(tuple(it.product((-1, 1), repeat=N))).T
 print(V.shape) # (num neurons N, num verticies 2**N)
 
