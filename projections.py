@@ -6,7 +6,10 @@ import itertools as it
 from sign_solve import solve
 import matplotlib.pyplot as pt
 
-N = 4
+# np.set_printoptions(sign="+")
+np.set_printoptions(formatter={"int": lambda x: "%+d" % x})
+
+N = 5
 X = np.array(tuple(it.product((-1, 1), repeat=N))).T
 print(X.shape) # (num neurons N, num verticies 2**N)
 
@@ -40,7 +43,7 @@ for m,w in enumerate(weights):
 
     for j in range(X.shape[1]):
         if (w * X[:,j] > 0).all() and w.min() == w.max(): continue
-        if wX[j] < 0: continue
+        # if wX[j] < 0: continue # antipodal planes
 
         # wp = w - ((w @ X[:,j]) * X[:,j]).T / N
         # wpX = wp @ X
@@ -55,49 +58,112 @@ for m,w in enumerate(weights):
     # try to solve equal dot of w with every boundary
     # w = np.linalg.lstsw(X[:,boundaries[m]].T, 
 
-for m in range(len(weights)):
-    pt.plot([m]*boundaries[m].sum(), scdists[m][boundaries[m]], 'ko')
-    # pt.plot([m], [len(np.unique(scdists[m][boundaries[m]]))], 'ko')
-    # if len(np.unique(dists[m][boundaries[m]])) == 0:
-    #     print(boundaries[m])
-    #     print(dists[m])
-pt.xlabel("region")
-pt.ylabel("distances to boundary planes")
-# pt.ylabel("num distinct distances to boundary planes")
-pt.show()
+# # distances to boundaries
+# for m in range(len(weights)):
+#     pt.plot([m]*boundaries[m].sum(), scdists[m][boundaries[m]], 'ko')
+#     # pt.plot([m], [len(np.unique(scdists[m][boundaries[m]]))], 'ko')
+#     # if len(np.unique(dists[m][boundaries[m]])) == 0:
+#     #     print(boundaries[m])
+#     #     print(dists[m])
+# pt.xlabel("region")
+# pt.ylabel("distances to boundary planes")
+# # pt.ylabel("num distinct distances to boundary planes")
+# pt.show()
 
-# strata over all regions/planes
-pt.scatter(boundaries.flatten(), scdists.flatten())
-# pt.scatter(boundaries.flatten(), dists.flatten())
-pt.xlabel("x plane boundary of w region")
-pt.ylabel("distance from w to x plane")
-pt.show()
+# # strata over all regions/planes
+# pt.scatter(boundaries.flatten(), scdists.flatten())
+# # pt.scatter(boundaries.flatten(), dists.flatten())
+# pt.xlabel("x plane boundary of w region")
+# pt.ylabel("distance from w to x plane")
+# pt.show()
+
+# is every bit flip between feasible hemi regions also a flip over a boundary plane?
+feasflip = np.zeros(boundaries.shape, dtype=bool)
+for m in range(hemis.shape[0]): 
+
+    for b in range(2**(N-1)): # only first half for fixed bias
+        flip = hemis[m, :2**(N-1)].copy()
+        flip[b] *= -1
+        if not (flip == hemis[:, :2**(N-1)]).all(axis=1).any():
+            # print(flip)
+            # print(hemis[:, :2**(N-1)])
+            # print(flip == hemis[:, :2**(N-1)])
+            # input('.')
+            continue # flip to infeasible hemi
+        feasflip[m,b] = True
+        # if not (boundaries[m,b] or boundaries[m, 2**N - 1 - b]): print(f"{m,b}: feas flip not across boundary")
+        if not boundaries[m,b]: print(f"{m,b}: feas flip not across boundary")
+
+if (feasflip == boundaries)[:, :2**(N-1)].all():
+    print("ALL feasible flips are across boundaries")
+else:
+    print("Some feasible flips are NOT across boundaries")
+
+# distribution of boundary plane counts
+bcounts = boundaries.sum(axis=1) // 2 # halve for antipodes
+classes = {}
+for m,count in enumerate(bcounts):
+    if count not in classes: classes[count] = set()
+    wclass = tuple(np.sort(np.fabs(weights[m])))
+    classes[count].add(wclass)
+
+print("\nregion boundary counts and weight magnitudes")
+for count in sorted(classes.keys()):
+    print(count, classes[count])
+
+# flip transitions
+for m in range(hemis.shape[0]):
+    for b in np.flatnonzero(boundaries[m,:2**(N-1)]):
+        flip = hemis[m].copy()
+        flip[[b, 2**N - 1 - b]] *= -1
+        n = (flip == hemis).all(axis=1).argmax()
+        s = f"{m: 4d},{b: 4d}: w{weights[m]} x{X[:,b]} = {hemis[m,b]:+d} |{bcounts[m]: 4d}| -> {n: 4d}: w{weights[n]} |{bcounts[n]: 4d}|"
+        input(s)
+
+
+# pt.plot(bcounts)
+# pt.show()
+
 
 # dist/boundary heatmaps
-# pt.subplot(3,1,1)
-# pt.imshow(dists.T)
-# pt.subplot(3,1,2)
-# pt.imshow(boundaries.T)
-# pt.subplot(3,1,3)
-# pt.imshow(hemis.T)
-# pt.show()
-pt.subplot(1,4,1)
-pt.imshow(dists)
-pt.subplot(1,4,2)
-pt.imshow(boundaries)
+tp = (N > 4) #False
+rows,cols = (6, 1) if tp else (1, 6)
+lab1, lab2 = (pt.ylabel, pt.xlabel) if tp else (pt.xlabel, pt.ylabel)
+sp = 0
+
+pt.subplot(rows, cols, sp := sp + 1)
+pt.imshow(dists.T if tp else dists)
+
+pt.subplot(rows, cols, sp := sp + 1)
+pt.imshow(boundaries.T if tp else boundaries)
 pt.title("Boundaries")
-pt.xlabel("Vertex plane")
-pt.ylabel("Weight region (hemi)")
-pt.subplot(1,4,3)
-pt.imshow(hemis)
+lab1("Vertex plane")
+lab2("Weight region (hemi)")
+
+pt.subplot(rows, cols, sp := sp + 1)
+pt.imshow(feasflip.T if tp else feasflip)
+pt.title("Feasible bit flips")
+lab1("Vertex plane")
+lab2("Weight region (hemi)")
+
+pt.subplot(rows, cols, sp := sp + 1)
+pt.imshow(hemis.T if tp else hemis)
 pt.title("Hemis")
-pt.xlabel("Vertex x")
-pt.ylabel("s(wx)")
-pt.subplot(1,4,4)
-pt.imshow(weights)
+lab1("Vertex x")
+lab2("s(wx)")
+
+pt.subplot(rows, cols, sp := sp + 1)
+pt.imshow(weights.T if tp else weights)
 pt.title("Weights")
-pt.xlabel("i")
-pt.ylabel("hemi")
+lab1("i")
+lab2("hemi")
+
+pt.subplot(rows, cols, sp := sp + 1)
+bcounts = bcounts.reshape(-1,1)
+pt.imshow(bcounts.T if tp else bcounts)
+pt.title("Boundary counts")
+lab2("hemi")
+
 pt.tight_layout()
 pt.show()
 
