@@ -9,7 +9,7 @@ import matplotlib.pyplot as pt
 # np.set_printoptions(sign="+")
 np.set_printoptions(formatter={"int": lambda x: "%+d" % x})
 
-N = 5
+N = 4
 X = np.array(tuple(it.product((-1, 1), repeat=N))).T
 print(X.shape) # (num neurons N, num verticies 2**N)
 
@@ -70,12 +70,21 @@ for m,w in enumerate(weights):
 # # pt.ylabel("num distinct distances to boundary planes")
 # pt.show()
 
-# # strata over all regions/planes
-# pt.scatter(boundaries.flatten(), scdists.flatten())
-# # pt.scatter(boundaries.flatten(), dists.flatten())
-# pt.xlabel("x plane boundary of w region")
-# pt.ylabel("distance from w to x plane")
-# pt.show()
+# distances to all planes
+for m in range(len(weights)):
+    pt.plot([m,m],[scdists[m].min(), scdists[m].max()], '-', color=(.6,.6,.6))
+    pt.plot([m]*boundaries[m].sum(), scdists[m][boundaries[m]], 'k.')
+    pt.plot([m]*(1-boundaries)[m].sum(), scdists[m][~boundaries[m]], 'b.')
+pt.xlabel("region")
+pt.ylabel("distances to planes")
+pt.show()
+
+# strata over all regions/planes
+pt.scatter(boundaries.flatten(), scdists.flatten())
+# pt.scatter(boundaries.flatten(), dists.flatten())
+pt.xlabel("x plane boundary of w region")
+pt.ylabel("distance from w to x plane")
+pt.show()
 
 # is every bit flip between feasible hemi regions also a flip over a boundary plane?
 feasflip = np.zeros(boundaries.shape, dtype=bool)
@@ -111,19 +120,36 @@ print("\nregion boundary counts and weight magnitudes")
 for count in sorted(classes.keys()):
     print(count, classes[count])
 
+input('enter for flip transits...')
+
 # flip transitions
+rulework = True
 for m in range(hemis.shape[0]):
     for b in np.flatnonzero(boundaries[m,:2**(N-1)]):
+
         flip = hemis[m].copy()
         flip[[b, 2**N - 1 - b]] *= -1
         n = (flip == hemis).all(axis=1).argmax()
         s = f"{m: 4d},{b: 4d}: w{weights[m]} x{X[:,b]} = {hemis[m,b]:+d} |{bcounts[m]: 4d}| -> {n: 4d}: w{weights[n]} |{bcounts[n]: 4d}|"
-        input(s)
+        # input(s)
+        print(s)
 
+        # check flip rules
+        w, x = weights[m], X[:,b]
+        if (w*x).sum() < 0: x *= -1
+        if np.fabs(weights[m]).sum() == 1: # identity row
+            w_f = (N-1) * w - x
+        else:
+            w_f = w - (w + x) * 2 / (N+1)
+
+        if (w_f.round() != weights[n]).any():
+            rulework = False
+            input(f"  {w_f} broken :( ...")
+
+if rulework: print("Rule worked!!")
 
 # pt.plot(bcounts)
 # pt.show()
-
 
 # dist/boundary heatmaps
 tp = (N > 4) #False
@@ -166,4 +192,3 @@ lab2("hemi")
 
 pt.tight_layout()
 pt.show()
-

@@ -16,6 +16,12 @@ S = np.array([
     [0, 1,  0, -1, 0],
 ])
 
+w = np.array([1,1,1])
+x = np.array([1,1,-1])
+
+w_p = w - (w*x).sum() * x / N
+w_r = w - 2*(w*x).sum() * x / N
+
 fig = pt.figure()
 ax = fig.add_subplot(projection='3d')
 ax.plot( S[0], S[1], S[2], 'ko-')
@@ -24,10 +30,16 @@ ax.plot( S[1], S[2], S[0], 'ko-')
 ax.plot( S[1], S[2],-S[0], 'ko-')
 ax.plot( S[2], S[0], S[1],'ko-')
 ax.plot( S[2],-S[0], S[1],'ko-')
-ax.plot([0, 1], [0, 1], [0, 1], 'r-')
+
+ax.plot([0, w[0]], [0, w[1]], [0, w[2]], 'r-')
 # ax.plot([0, 3**-.5], [0, 3**-.5], [0, 3**-.5], 'r-')
 ax.plot([0, 0], [0, 0], [0, 1], 'g-')
-ax.plot([-1, 1], [-1, 1], [1, -1], 'b-')
-ax.plot([0, 0.5], [0, 0.5], [0, 1], 'm-')
+ax.plot([-x[0], x[0]], [-x[1], x[1]], [-x[2], x[2]], 'b-')
+# ax.plot([0, 0.5], [0, 0.5], [0, 1], 'm-')
+ax.plot([0, w_p[0]], [0, w_p[1]], [0, w_p[2]], 'm-')
+ax.plot([0, w_r[0]], [0, w_r[1]], [0, w_r[2]], 'o-')
+ax.set_xlabel("x")
+ax.set_ylabel("y")
+ax.set_zlabel("z")
 pt.show()
 
