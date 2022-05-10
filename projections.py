@@ -9,7 +9,7 @@ import matplotlib.pyplot as pt
 # np.set_printoptions(sign="+")
 np.set_printoptions(formatter={"int": lambda x: "%+d" % x})
 
-N = 4
+N = 5
 X = np.array(tuple(it.product((-1, 1), repeat=N))).T
 print(X.shape) # (num neurons N, num verticies 2**N)
 
@@ -70,21 +70,21 @@ for m,w in enumerate(weights):
 # # pt.ylabel("num distinct distances to boundary planes")
 # pt.show()
 
-# distances to all planes
-for m in range(len(weights)):
-    pt.plot([m,m],[scdists[m].min(), scdists[m].max()], '-', color=(.6,.6,.6))
-    pt.plot([m]*boundaries[m].sum(), scdists[m][boundaries[m]], 'k.')
-    pt.plot([m]*(1-boundaries)[m].sum(), scdists[m][~boundaries[m]], 'b.')
-pt.xlabel("region")
-pt.ylabel("distances to planes")
-pt.show()
+# # distances to all planes
+# for m in range(len(weights)):
+#     pt.plot([m,m],[scdists[m].min(), scdists[m].max()], '-', color=(.6,.6,.6))
+#     pt.plot([m]*boundaries[m].sum(), scdists[m][boundaries[m]], 'k.')
+#     pt.plot([m]*(1-boundaries)[m].sum(), scdists[m][~boundaries[m]], 'b.')
+# pt.xlabel("region")
+# pt.ylabel("distances to planes")
+# pt.show()
 
-# strata over all regions/planes
-pt.scatter(boundaries.flatten(), scdists.flatten())
-# pt.scatter(boundaries.flatten(), dists.flatten())
-pt.xlabel("x plane boundary of w region")
-pt.ylabel("distance from w to x plane")
-pt.show()
+# # strata over all regions/planes
+# pt.scatter(boundaries.flatten(), scdists.flatten())
+# # pt.scatter(boundaries.flatten(), dists.flatten())
+# pt.xlabel("x plane boundary of w region")
+# pt.ylabel("distance from w to x plane")
+# pt.show()
 
 # is every bit flip between feasible hemi regions also a flip over a boundary plane?
 feasflip = np.zeros(boundaries.shape, dtype=bool)
@@ -120,10 +120,11 @@ print("\nregion boundary counts and weight magnitudes")
 for count in sorted(classes.keys()):
     print(count, classes[count])
 
-input('enter for flip transits...')
+# input('enter for flip transits...')
 
 # flip transitions
 rulework = True
+spanwork = True
 for m in range(hemis.shape[0]):
     for b in np.flatnonzero(boundaries[m,:2**(N-1)]):
 
@@ -133,6 +134,20 @@ for m in range(hemis.shape[0]):
         s = f"{m: 4d},{b: 4d}: w{weights[m]} x{X[:,b]} = {hemis[m,b]:+d} |{bcounts[m]: 4d}| -> {n: 4d}: w{weights[n]} |{bcounts[n]: 4d}|"
         # input(s)
         print(s)
+
+        # check span
+        wx = np.stack((weights[m], X[:,b])).T
+        coef = np.linalg.lstsq(wx, weights[n], rcond=None)[0]
+        w_f = wx.dot(coef)
+        hem = np.sign(w_f.dot(X))
+        if (w_f.round() != weights[n]).any():
+            print(coef)
+            print(w_f.T)
+            print(hem)
+            print(hemis[n])
+            print((hemis[n] == hem).astype(int))
+            spanwork = False
+            input("not in span!")
 
         # check flip rules
         w, x = weights[m], X[:,b]
@@ -144,9 +159,11 @@ for m in range(hemis.shape[0]):
 
         if (w_f.round() != weights[n]).any():
             rulework = False
-            input(f"  {w_f} broken :( ...")
+            # input(f"  {w_f} broken :( ...")
 
+if spanwork: print("Span worked!!")
 if rulework: print("Rule worked!!")
+else: print("Rule broke :\\")
 
 # pt.plot(bcounts)
 # pt.show()
