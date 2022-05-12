@@ -7,9 +7,9 @@ from sign_solve import solve
 import matplotlib.pyplot as pt
 
 # np.set_printoptions(sign="+")
-np.set_printoptions(formatter={"int": lambda x: "%+d" % x})
+np.set_printoptions(formatter={"int": lambda x: "%+d" % x}, linewidth=1000)
 
-N = 5
+N = 4
 X = np.array(tuple(it.product((-1, 1), repeat=N))).T
 print(X.shape) # (num neurons N, num verticies 2**N)
 
@@ -86,27 +86,27 @@ for m,w in enumerate(weights):
 # pt.ylabel("distance from w to x plane")
 # pt.show()
 
-# is every bit flip between feasible hemi regions also a flip over a boundary plane?
-feasflip = np.zeros(boundaries.shape, dtype=bool)
-for m in range(hemis.shape[0]): 
+# # is every bit flip between feasible hemi regions also a flip over a boundary plane?
+# feasflip = np.zeros(boundaries.shape, dtype=bool)
+# for m in range(hemis.shape[0]): 
 
-    for b in range(2**(N-1)): # only first half for fixed bias
-        flip = hemis[m, :2**(N-1)].copy()
-        flip[b] *= -1
-        if not (flip == hemis[:, :2**(N-1)]).all(axis=1).any():
-            # print(flip)
-            # print(hemis[:, :2**(N-1)])
-            # print(flip == hemis[:, :2**(N-1)])
-            # input('.')
-            continue # flip to infeasible hemi
-        feasflip[m,b] = True
-        # if not (boundaries[m,b] or boundaries[m, 2**N - 1 - b]): print(f"{m,b}: feas flip not across boundary")
-        if not boundaries[m,b]: print(f"{m,b}: feas flip not across boundary")
+#     for b in range(2**(N-1)): # only first half for fixed bias
+#         flip = hemis[m, :2**(N-1)].copy()
+#         flip[b] *= -1
+#         if not (flip == hemis[:, :2**(N-1)]).all(axis=1).any():
+#             # print(flip)
+#             # print(hemis[:, :2**(N-1)])
+#             # print(flip == hemis[:, :2**(N-1)])
+#             # input('.')
+#             continue # flip to infeasible hemi
+#         feasflip[m,b] = True
+#         # if not (boundaries[m,b] or boundaries[m, 2**N - 1 - b]): print(f"{m,b}: feas flip not across boundary")
+#         if not boundaries[m,b]: print(f"{m,b}: feas flip not across boundary")
 
-if (feasflip == boundaries)[:, :2**(N-1)].all():
-    print("ALL feasible flips are across boundaries")
-else:
-    print("Some feasible flips are NOT across boundaries")
+# if (feasflip == boundaries)[:, :2**(N-1)].all():
+#     print("ALL feasible flips are across boundaries")
+# else:
+#     print("Some feasible flips are NOT across boundaries")
 
 # distribution of boundary plane counts
 bcounts = boundaries.sum(axis=1) // 2 # halve for antipodes
@@ -138,19 +138,23 @@ for m in range(hemis.shape[0]):
         # check span
         wx = np.stack((weights[m], X[:,b])).T
         coef = np.linalg.lstsq(wx, weights[n], rcond=None)[0]
-        w_f = wx.dot(coef)
-        hem = np.sign(w_f.dot(X))
+        # w_f = wx.dot(coef)
+        w_f = (wx * coef).sum(axis=1).reshape(1,-1)
+        dots = w_f @ X
+        hem = np.sign(dots).astype(int)
         if (w_f.round() != weights[n]).any():
-            print(coef)
-            print(w_f.T)
-            print(hem)
-            print(hemis[n])
-            print((hemis[n] == hem).astype(int))
+            print("coef    ", coef)
+            print("w_f     ",w_f)
+            print(X)
+            print("dots    ",dots.round(2))
+            print("hem     ",hem)
+            print("hemis[n]",hemis[n])
+            print("match   ",(hemis[n] == hem).astype(int))
             spanwork = False
             input("not in span!")
 
         # check flip rules
-        w, x = weights[m], X[:,b]
+        w, x = weights[m], X[:,b].copy()
         if (w*x).sum() < 0: x *= -1
         if np.fabs(weights[m]).sum() == 1: # identity row
             w_f = (N-1) * w - x
