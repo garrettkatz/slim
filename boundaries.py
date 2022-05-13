@@ -10,7 +10,7 @@ import scipy.optimize as so
 # np.set_printoptions(sign="+")
 np.set_printoptions(formatter={"int": lambda x: "%+d" % x}, linewidth=1000)
 
-N = 5
+N = 6
 X = np.array(tuple(it.product((-1, 1), repeat=N))).T
 print(X.shape) # (num neurons N, num verticies 2**N)
 
@@ -99,10 +99,14 @@ for m in range(uhemis.shape[0]):
             # reflcond[m,pos[b]] = (wr @ X * hr >= .99).all()
             reflcond[m,pos[b]] = (wr @ X * hr >= 0).all()
             if not reflcond[m,pos[b]]:
-                print(uhemis[m])
-                print(hr)
-                print(wr @ X)
-                print(wr)
+                n = (hr == hemis).all(axis=1).argmax()
+                print("old h", uhemis[m])
+                print("new h", hr)
+                print("wr X ", wr @ X)
+                print("wr   ", wr)
+                print("wp   ", wp)
+                print("new w", weights[n])
+                print("x fl ", X[:,pos[b]])
                 input("!r!")
 
     # check uniqueness of canonical vector w Xb = 1 (rank condition)
