@@ -1,4 +1,4 @@
-import os
+import os, sys
 import numpy as np
 import pickle as pk
 from scipy.special import comb
@@ -10,7 +10,9 @@ import scipy.optimize as so
 # np.set_printoptions(sign="+")
 np.set_printoptions(formatter={"int": lambda x: "%+d" % x}, linewidth=1000)
 
-N = 6
+# N = 3
+N = int(sys.argv[1])
+
 X = np.array(tuple(it.product((-1, 1), repeat=N))).T
 print(X.shape) # (num neurons N, num verticies 2**N)
 
@@ -49,7 +51,9 @@ _, uidx, uinv = np.unique(np.sort(np.fabs(weights).astype(int), axis=1), axis=0,
 uweights = weights[uidx,:]
 uhemis = hemis[uidx,:]
 print(uweights)
+print(uhemis)
 print(uhemis.shape)
+input('.')
 
 uboundaries = np.zeros((uhemis.shape[0], X.shape[1]), dtype=bool)
 dists = np.zeros((uhemis.shape[0], X.shape[1]))

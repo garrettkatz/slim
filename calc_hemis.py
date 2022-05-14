@@ -1,18 +1,27 @@
-import os
+import os, sys
 import numpy as np
 import pickle as pk
 from scipy.special import comb
 import itertools as it
 from sign_solve import solve
+from scipy.optimize import OptimizeWarning
+from scipy.linalg import LinAlgWarning
+
+import warnings
+
+warnings.filterwarnings("ignore", category=LinAlgWarning)
+warnings.filterwarnings("ignore", category=OptimizeWarning)
 
 np.set_printoptions(threshold=np.inf)
 
-N = 4
+# N = 4
+N = int(sys.argv[1])
+
 V = np.array(tuple(it.product((-1, 1), repeat=N))).T
 print(V.shape) # (num neurons N, num verticies 2**N)
 
 fname = f"hemis_{N}.npy"
-if os.path.exists(fname):
+if False: #os.path.exists(fname):
     with open(fname,"rb") as f: weights, hemis = pk.load(f)
 else:
 
@@ -62,31 +71,31 @@ print((hemis > 0).sum(axis=1))
 print("rounded weights:")
 print(np.concatenate(weights, axis=0).round())
 
-import matplotlib.pyplot as pt
-pt.subplot(1,3,1)
-pt.imshow(hemis)
-pt.subplot(1,3,2)
-pt.imshow(np.concatenate(weights, axis=0))
-pt.subplot(1,3,3)
-pt.plot(np.unique(weights))
-pt.show()
-pt.close()
+# import matplotlib.pyplot as pt
+# pt.subplot(1,3,1)
+# pt.imshow(hemis)
+# pt.subplot(1,3,2)
+# pt.imshow(np.concatenate(weights, axis=0))
+# pt.subplot(1,3,3)
+# pt.plot(np.unique(weights))
+# pt.show()
+# pt.close()
 
-nums = (hemis > 0).astype(int) @ 2**np.arange(2**N).reshape(-1,1)
-nums = nums.flatten()
-nums.sort()
-print(nums)
-input('.')
-print(nums[1:] - nums[:-1])
-pt.figure()
-pt.subplot(2,1,1)
-pt.plot(nums, np.ones(len(nums)), 'bo')
-pt.xlim([0, 2**(2**N)])
-pt.subplot(2,1,2)
-pt.plot(nums[1:] - nums[:-1])
-pt.show()
+# nums = (hemis > 0).astype(int) @ 2**np.arange(2**N).reshape(-1,1)
+# nums = nums.flatten()
+# nums.sort()
+# print(nums)
+# input('.')
+# print(nums[1:] - nums[:-1])
+# pt.figure()
+# pt.subplot(2,1,1)
+# pt.plot(nums, np.ones(len(nums)), 'bo')
+# pt.xlim([0, 2**(2**N)])
+# pt.subplot(2,1,2)
+# pt.plot(nums[1:] - nums[:-1])
+# pt.show()
 
-# # exp case M ~ 2**(N-1), first kidx: is every binary integer 0 ... M-1 found in the rows of H[:,kidx]?
-# # although first kidx does not shatter N4M8
-# print(np.unique(hemis[:,:2**(N-1)]))
+# # # exp case M ~ 2**(N-1), first kidx: is every binary integer 0 ... M-1 found in the rows of H[:,kidx]?
+# # # although first kidx does not shatter N4M8
+# # print(np.unique(hemis[:,:2**(N-1)]))
 
