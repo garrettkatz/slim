@@ -55,6 +55,7 @@ uboundaries = np.zeros((uhemis.shape[0], X.shape[1]), dtype=bool)
 dists = np.zeros((uhemis.shape[0], X.shape[1]))
 orthcond = np.zeros((uhemis.shape[0], X.shape[1]), dtype=bool)
 reflcond = np.zeros((uhemis.shape[0], X.shape[1]), dtype=bool)
+spancond = np.zeros((uhemis.shape[0], X.shape[1]), dtype=bool)
 rks = np.empty(uhemis.shape[0], dtype=int)
 
 for m in range(uhemis.shape[0]):
@@ -96,22 +97,47 @@ for m in range(uhemis.shape[0]):
             wr = N * uweights[m] - 2 * (uweights[m] * X[:,pos[b]]).sum() * X[:,pos[b]] # scale to maintain integer values
             hr = uhemis[m].copy()
             hr[[pos[b], 2**N - 1 - pos[b]]] *= -1
+            n = (hr == hemis).all(axis=1).argmax()
             # reflcond[m,pos[b]] = (wr @ X * hr >= .99).all()
             reflcond[m,pos[b]] = (wr @ X * hr >= 0).all()
-            if not reflcond[m,pos[b]]:
-                n = (hr == hemis).all(axis=1).argmax()
-                print("old h", uhemis[m])
-                print("new h", hr)
-                print("wr X ", wr @ X)
-                print("wr   ", wr)
-                print("wp   ", wp)
-                print("new w", weights[n])
-                print("x fl ", X[:,pos[b]])
-                input("!r!")
+            # if not reflcond[m,pos[b]]:
+            #     print("old h", uhemis[m])
+            #     print("new h", hr)
+            #     print("wr X ", wr @ X)
+            #     print("wr   ", wr)
+            #     print("wp   ", wp)
+            #     print("new w", weights[n])
+            #     print("x fl ", X[:,pos[b]])
+            #     # input("!r!")
+
+            # A = np.stack((uweights[m], X[:,pos[b]], np.sign(uweights[m]), np.sign(uweights[m] * X[:,pos[b]]))).T
+            A = np.stack((uweights[m], X[:,pos[b]])).T
+            coefs = np.linalg.lstsq(A, weights[n], rcond=None)[0]
+            ws = A @ coefs
+            spancond[m,pos[b]] = (ws.round() == weights[n].round()).all()
+            # if not spancond[m,pos[b]]:
+            #     print(X[:,pos[b]])
+            #     print(uweights[m])
+            #     print(weights[n] - ws)
+            #     input("!s!")
 
     # check uniqueness of canonical vector w Xb = 1 (rank condition)
     B = uboundaries[m].sum()
     rks[m] = np.linalg.matrix_rank(np.concatenate((X[:,uboundaries[m]].T, np.ones((B, 1))), axis=1))
+
+print("Max normal dots within region:")
+for m in range(uhemis.shape[0]):
+    dots = X[:,uboundaries[m]].T @ X[:,uboundaries[m]]
+    dots -= N*np.eye(uboundaries[m].sum(), dtype=int) # exclude self-dots
+    print(f"{m}: {dots.max()} of {N}")
+
+print("Min > 1 dot ratios:")
+for m in range(uhemis.shape[0]):
+    numers = N * uweights[m] @ X
+    for b,bj in enumerate(np.flatnonzero(uboundaries[m])):
+        denoms = X[:,bj] @ X
+        sorter = np.argsort(numers / denoms)
+        print(f"{m:02},{b:02}: " + ", ".join([f"{n}/{d}" for n,d in zip(numers[sorter], denoms[sorter]) if (n > d > 0)]))
 
 if ((dists == 1) == uboundaries).all():
     print("all boundary distances 1")
@@ -136,10 +162,27 @@ if (reflcond == uboundaries).all():
 else:
     print("some boundary reflections leave new region")
 
+if (spancond == uboundaries).all():
+    print("all flipped weights are in span")
+else:
+    print("some flipped weights are not in span")
+
+# distances to all planes in each region
+scdists = uweights @ X
+for m in range(len(uweights)):
+    pt.plot([m,m],[scdists[m].min(), scdists[m].max()], '-', color=(.6,.6,.6))
+    pt.plot([m+.25]*uboundaries[m].sum(), scdists[m][uboundaries[m]], 'k.')
+    pt.plot([m]*(1-uboundaries)[m].sum(), scdists[m][~uboundaries[m]], 'b.')
+pt.xlabel("region")
+pt.ylabel("distances to planes")
+pt.show()
+
 rows, cols = (2,1) if N > 10 else (1, 2)
-pt.subplot(2,1,1)
-pt.imshow(uboundaries.T if N > 10 else uboundaries)
-pt.subplot(2,1,2)
+pt.subplot(3,1,1)
 pt.imshow(dists.T if N > 10 else dists)
+pt.subplot(3,1,2)
+pt.imshow(uboundaries.T if N > 10 else uboundaries)
+pt.subplot(3,1,3)
+pt.imshow((spancond != uboundaries).T if N > 10 else spancond != uboundaries)
 pt.show()
 

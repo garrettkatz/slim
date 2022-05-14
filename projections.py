@@ -9,7 +9,7 @@ import matplotlib.pyplot as pt
 # np.set_printoptions(sign="+")
 np.set_printoptions(formatter={"int": lambda x: "%+d" % x}, linewidth=1000)
 
-N = 4
+N = 5
 X = np.array(tuple(it.product((-1, 1), repeat=N))).T
 print(X.shape) # (num neurons N, num verticies 2**N)
 
@@ -70,24 +70,24 @@ for m,w in enumerate(weights):
 # # pt.ylabel("num distinct distances to boundary planes")
 # pt.show()
 
-# # distances to all planes
-# for m in range(len(weights)):
-#     pt.plot([m,m],[scdists[m].min(), scdists[m].max()], '-', color=(.6,.6,.6))
-#     pt.plot([m]*boundaries[m].sum(), scdists[m][boundaries[m]], 'k.')
-#     pt.plot([m]*(1-boundaries)[m].sum(), scdists[m][~boundaries[m]], 'b.')
-# pt.xlabel("region")
-# pt.ylabel("distances to planes")
-# pt.show()
+# distances to all planes
+for m in range(len(weights)):
+    pt.plot([m,m],[scdists[m].min(), scdists[m].max()], '-', color=(.6,.6,.6))
+    pt.plot([m]*boundaries[m].sum(), scdists[m][boundaries[m]], 'k.')
+    pt.plot([m]*(1-boundaries)[m].sum(), scdists[m][~boundaries[m]], 'b.')
+pt.xlabel("region")
+pt.ylabel("distances to planes")
+pt.show()
 
-# # strata over all regions/planes
-# pt.scatter(boundaries.flatten(), scdists.flatten())
-# # pt.scatter(boundaries.flatten(), dists.flatten())
-# pt.xlabel("x plane boundary of w region")
-# pt.ylabel("distance from w to x plane")
-# pt.show()
+# strata over all regions/planes
+pt.scatter(boundaries.flatten(), scdists.flatten())
+# pt.scatter(boundaries.flatten(), dists.flatten())
+pt.xlabel("x plane boundary of w region")
+pt.ylabel("distance from w to x plane")
+pt.show()
 
+feasflip = np.zeros(boundaries.shape, dtype=bool)
 # # is every bit flip between feasible hemi regions also a flip over a boundary plane?
-# feasflip = np.zeros(boundaries.shape, dtype=bool)
 # for m in range(hemis.shape[0]): 
 
 #     for b in range(2**(N-1)): # only first half for fixed bias
@@ -136,7 +136,7 @@ for m in range(hemis.shape[0]):
         print(s)
 
         # check span
-        wx = np.stack((weights[m], X[:,b])).T
+        wx = np.stack((weights[m], X[:,b], np.sign(weights[m]))).T
         coef = np.linalg.lstsq(wx, weights[n], rcond=None)[0]
         # w_f = wx.dot(coef)
         w_f = (wx * coef).sum(axis=1).reshape(1,-1)
