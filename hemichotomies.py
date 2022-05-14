@@ -29,6 +29,7 @@ else:
     weights = []
     hemis = []
     leads = tuple({} for k in range(2**(N-1)))
+    carry = [2**(N-1)] # singleton list makes it global
     
     nd = NonDeterminator()
     def check_hemi():
@@ -36,7 +37,12 @@ else:
         y = ()
         for k in range(2**(N-1)):
     
-            y += (nd.choice((-1, +1)), )
+            yk = nd.choice((-1, +1))
+            if yk == +1 and k < carry[0]:
+                print(f"First inc {k}")
+                carry[0] = k
+
+            y += (yk,)
             if y in leads[k]:
                 if leads[k][y]: continue
                 else: return False
