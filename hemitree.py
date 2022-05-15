@@ -13,7 +13,7 @@ np.set_printoptions(formatter={"int": lambda x: "%+d" % x}, linewidth=1000)
 N = int(sys.argv[1])
 fname = f"hemitree_{N}.npz"
 
-if os.path.exists(fname):
+if False: #os.path.exists(fname):
 
     npz = np.load(fname)
     weights, hemis = npz["weights"], npz["hemis"]
@@ -21,40 +21,45 @@ if os.path.exists(fname):
 else:
 
     X = np.array(tuple(it.product((-1, +1), repeat=N))).T
-    Xh = X[:,:2**(N-1)]
+    Xh = X[:,:2**(N-1)] # more numerically stable linprog without antiparallel data
     
     weights = []
     hemis = []
     
-    def canonical(w): return tuple(np.sort(np.fabs(w)).astype(int))
+    def representative(w): return tuple(np.sort(np.fabs(w)).astype(int))
     
-    frontier = deque([np.eye(1, N, dtype=int).flatten()])
-    queued = set(map(canonical, frontier))
+    w0 = np.eye(1, N, dtype=int).flatten()
+    frontier = deque([w0])
+    queued = set([representative(w0)])
     while len(frontier) > 0:
         print(f"{len(weights)}: |frontier|={len(frontier)}")
     
         w = frontier.popleft()
         h = np.sign(w @ X)
-    
+
         weights.append(w)
         hemis.append(h)
-    
+
         for k in range(2**(N-1)):
+        # for k in np.flatnonzero(np.fabs(w @ Xh) == 1): # only assuming linprog preserves boundary condition
             hf = h[:2**(N-1)].copy()
             hf[k] *= -1
-    
+
             result = linprog(
                 c = Xh @ hf,
                 A_ub = -(Xh * hf).T,
                 b_ub = -np.ones(2**(N-1)),
                 bounds = (None, None),
+
+                # method = "revised simplex",
+                # x0 = N*(N-2)*w - (N-1)*h[k]*X[:,k], # guaranteed feasible? only if linprog preserves boundary condition
             )
             wf = result.x
             feasible = (np.sign(wf @ Xh) == hf).all()
             if not feasible: continue
     
             wf = wf.round().astype(int) # empirically observed to be integer-valued
-            wf_rep = canonical(wf)
+            wf_rep = representative(wf)
             if wf_rep in queued: continue
     
             queued.add(wf_rep)

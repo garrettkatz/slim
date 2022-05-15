@@ -6,6 +6,11 @@ import itertools as it
 from sign_solve import solve
 import matplotlib.pyplot as pt
 import scipy.optimize as so
+from scipy.linalg import LinAlgWarning
+import warnings
+
+warnings.filterwarnings("ignore", category=LinAlgWarning)
+warnings.filterwarnings("ignore", category=so.OptimizeWarning)
 
 # np.set_printoptions(sign="+")
 np.set_printoptions(formatter={"int": lambda x: "%+d" % x}, linewidth=1000)
@@ -16,24 +21,28 @@ N = int(sys.argv[1])
 X = np.array(tuple(it.product((-1, 1), repeat=N))).T
 print(X.shape) # (num neurons N, num verticies 2**N)
 
-# calculate all column perms of X for signed row permutations of neurons
-pows = 2**np.arange(N-1,-1,-1)
-perms = []
-for p in map(list, it.permutations(range(N))):
-    for s in it.product((+1,-1), repeat=N):
-        perms.append( pows @ ((np.array(s).reshape(N,1) * X[p,:]) > 0) )
-print(f"{len(perms)} perms")
-print(perms[0]) # identity with p,s ordering
+# fname = f"hemis_{N}.npy"
+# with open(fname,"rb") as f: weights, hemis = pk.load(f)
+# weights = np.concatenate(weights, axis=0).round().astype(int)
 
-
-fname = f"hemis_{N}.npy"
-with open(fname,"rb") as f: weights, hemis = pk.load(f)
+npz = np.load(f"hemitree_{N}.npz")
+weights, hemis = npz["weights"], npz["hemis"]
 
 print(hemis.shape)
 print(hemis) # (num_dichotomies, num vertices = 2**N)
-
-weights = np.concatenate(weights, axis=0).round().astype(int)
 print(weights)
+print("w sums", weights.sum(axis=1))
+print(((weights.sum(axis=1) % 2) == 1).all())
+input("all odd ^^..")
+
+# # calculate all column perms of X for signed row permutations of neurons
+# pows = 2**np.arange(N-1,-1,-1)
+# perms = []
+# for p in map(list, it.permutations(range(N))):
+#     for s in it.product((+1,-1), repeat=N):
+#         perms.append( pows @ ((np.array(s).reshape(N,1) * X[p,:]) > 0) )
+# print(f"{len(perms)} perms")
+# print(perms[0]) # identity with p,s ordering
 
 # # only keep one representative from every signed row permutation equivalence class
 # keep = np.ones(hemis.shape[0], dtype=bool)
@@ -47,13 +56,15 @@ print(weights)
 # weights = weights[keep,:]
 
 # only keep one representative from every weight multiset equivalent class
-_, uidx, uinv = np.unique(np.sort(np.fabs(weights).astype(int), axis=1), axis=0, return_index=True, return_inverse=True)
+reprs, uidx, uinv = np.unique(np.sort(np.fabs(weights).astype(int), axis=1), axis=0, return_index=True, return_inverse=True)
 uweights = weights[uidx,:]
 uhemis = hemis[uidx,:]
 print(uweights)
 print(uhemis)
 print(uhemis.shape)
-input('.')
+print(uidx)
+
+reprs = set(map(tuple, reprs))
 
 uboundaries = np.zeros((uhemis.shape[0], X.shape[1]), dtype=bool)
 dists = np.zeros((uhemis.shape[0], X.shape[1]))
@@ -101,7 +112,7 @@ for m in range(uhemis.shape[0]):
             wr = N * uweights[m] - 2 * (uweights[m] * X[:,pos[b]]).sum() * X[:,pos[b]] # scale to maintain integer values
             hr = uhemis[m].copy()
             hr[[pos[b], 2**N - 1 - pos[b]]] *= -1
-            n = (hr == hemis).all(axis=1).argmax()
+
             # reflcond[m,pos[b]] = (wr @ X * hr >= .99).all()
             reflcond[m,pos[b]] = (wr @ X * hr >= 0).all()
             # if not reflcond[m,pos[b]]:
@@ -114,16 +125,91 @@ for m in range(uhemis.shape[0]):
             #     print("x fl ", X[:,pos[b]])
             #     # input("!r!")
 
+            # # lookup when using hemis_{N}.npy
+            # n = (hr == hemis).all(axis=1).argmax()
+            # wn = weights[n]
+            # recalculate wn online when using reduced hemitree data
+            result = so.linprog(
+                # c = X @ hr, # numerically ill-behaved
+                # A_ub = -(X * hr).T,
+                # b_ub = -np.ones(2**N),
+                # bounds = (None, None),
+                c = X[:,:2**(N-1)] @ hr[:2**(N-1)],
+                A_ub = -(X * hr)[:,:2**(N-1)].T,
+                b_ub = -np.ones(2**(N-1)),
+                bounds = (None, None),
+            )
+            wn = result.x
+            print("lookup flip region: flipj, hr, c, wn, wn round")
+            print(pos[b])
+            print(hr)
+            print(X @ hr)
+            print(wn)
+            assert (np.sign(wn @ X) == hr).all()
+            wn = result.x.round().astype(int)
+            print(wn)
+            assert (np.sign(wn @ X) == hr).all()
+            assert tuple(np.sort(np.fabs(wn))) in reprs
+
             # A = np.stack((uweights[m], X[:,pos[b]], np.sign(uweights[m]), np.sign(uweights[m] * X[:,pos[b]]))).T
             A = np.stack((uweights[m], X[:,pos[b]])).T
-            coefs = np.linalg.lstsq(A, weights[n], rcond=None)[0]
+            coefs = np.linalg.lstsq(A, wn, rcond=None)[0]
             ws = A @ coefs
-            spancond[m,pos[b]] = (ws.round() == weights[n].round()).all()
-            # if not spancond[m,pos[b]]:
-            #     print(X[:,pos[b]])
-            #     print(uweights[m])
-            #     print(weights[n] - ws)
-            #     input("!s!")
+            spancond[m,pos[b]] = (ws.round() == wn.round()).all()
+            if not spancond[m,pos[b]]:
+                print("out of span:")
+                print("w, wX, X")
+                print(uweights[m])
+                print(np.arange(2**(N-1)) % 10)
+                print(uweights[m] @ X[:,:2**(N-1)])
+                print(X[:,:2**(N-1)])
+                print("boundary")
+                print((np.fabs(uweights[m] @ X[:,:2**(N-1)]) == 1).astype(int))
+                # print((uboundaries[m] + uboundaries[m,::-1]).astype(int))
+                # print(uboundaries[m].astype(int))
+                print(f"flip {pos[b]}: x*")
+                print(X[:,pos[b]])
+                print("wf, wfX")
+                print(wn)
+                print(np.arange(2**(N-1)) % 10)
+                print(wn @ X[:,:2**(N-1)])
+                print("residual")
+                print(wn - ws)
+                # input("!s!")
+
+            # rounding from w eps
+            we = w - X[:,pos[b]]*(N-1)/(N-2)/N
+            assert (np.sign(we @ X) == hr).all()
+            wflo = np.floor(we).astype(int)
+            wcei = np.ceil(we).astype(int)
+            wrou = np.array(tuple(it.product(*np.stack((wflo, wcei)).T)))
+            wrou = wrou[np.fabs(wrou).sum(axis=1) % 2 == 1]
+            ham = np.fabs(wrou - we).sum(axis=1)
+            # ham = ((wrou - we)**2).sum(axis=1)
+            opt = ham.argmin()
+            if True: #(ham == ham[opt]).sum() > 1 or not (wrou[opt] == wn).all():
+                print("canonical wm:")
+                print(uweights[m])
+                print("flip x*:")
+                print(X[:,pos[b]])
+                print("non-canonical w eps:")
+                print(we)
+                print("neighbors:")
+                print(wrou.T)
+                print("hams:")
+                print(ham)
+                print("dots with x:")
+                print(X[:,pos[b]] @ wrou.T)
+                print("nearest odd ZN:")
+                print(wrou[opt])
+                print("canonical wm:")
+                print(uweights[m])
+                print("flip x*:")
+                print(X[:,pos[b]])
+                print("canonical wn:")
+                print(wn)
+                print("match:", (wrou[opt] == wn).all())
+                input("!e!")
 
     # check uniqueness of canonical vector w Xb = 1 (rank condition)
     B = uboundaries[m].sum()

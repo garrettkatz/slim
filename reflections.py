@@ -10,6 +10,9 @@ N = 3
 X = np.array(tuple(it.product((-1, 1), repeat=N))).T
 print(X.shape) # (num neurons N, num verticies 2**N)
 
+Z = np.array(tuple(it.product((-1,0,1), repeat=N)))
+Z = Z[np.fabs(Z).astype(int).sum(axis=1) % 2 == 1, :].T
+
 S = np.array([
     [1, 1,  1,  1, 1],
     [1, 0, -1,  0, 1],
@@ -24,6 +27,8 @@ w_r = w - 2*(w*x).sum() * x / N
 
 fig = pt.figure()
 ax = fig.add_subplot(projection='3d')
+ax.plot( Z[0], Z[1], Z[2], 'k+')
+
 ax.plot( S[0], S[1], S[2], 'ko-')
 ax.plot(-S[0], S[1], S[2], 'ko-')
 ax.plot( S[1], S[2], S[0], 'ko-')
