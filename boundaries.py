@@ -33,7 +33,7 @@ print(hemis) # (num_dichotomies, num vertices = 2**N)
 print(weights)
 print("w sums", weights.sum(axis=1))
 print(((weights.sum(axis=1) % 2) == 1).all())
-input("all odd ^^..")
+# input("all odd ^^..")
 
 # # calculate all column perms of X for signed row permutations of neurons
 # pows = 2**np.arange(N-1,-1,-1)
@@ -72,6 +72,9 @@ orthcond = np.zeros((uhemis.shape[0], X.shape[1]), dtype=bool)
 reflcond = np.zeros((uhemis.shape[0], X.shape[1]), dtype=bool)
 spancond = np.zeros((uhemis.shape[0], X.shape[1]), dtype=bool)
 rks = np.empty(uhemis.shape[0], dtype=int)
+
+inspan = 0
+outspan = 0
 
 for m in range(uhemis.shape[0]):
     print(f"linproging {m} of {uhemis.shape[0]}")
@@ -156,6 +159,8 @@ for m in range(uhemis.shape[0]):
             coefs = np.linalg.lstsq(A, wn, rcond=None)[0]
             ws = A @ coefs
             spancond[m,pos[b]] = (ws.round() == wn.round()).all()
+            if spancond[m,pos[b]]: inspan += 1
+            else: outspan += 1
             if not spancond[m,pos[b]]:
                 print("out of span:")
                 print("w, wX, X")
@@ -187,7 +192,7 @@ for m in range(uhemis.shape[0]):
             ham = np.fabs(wrou - we).sum(axis=1)
             # ham = ((wrou - we)**2).sum(axis=1)
             opt = ham.argmin()
-            if True: #(ham == ham[opt]).sum() > 1 or not (wrou[opt] == wn).all():
+            if False: #(ham == ham[opt]).sum() > 1 or not (wrou[opt] == wn).all():
                 print("canonical wm:")
                 print(uweights[m])
                 print("flip x*:")
@@ -257,22 +262,23 @@ if (spancond == uboundaries).all():
 else:
     print("some flipped weights are not in span")
 
-# distances to all planes in each region
-scdists = uweights @ X
-for m in range(len(uweights)):
-    pt.plot([m,m],[scdists[m].min(), scdists[m].max()], '-', color=(.6,.6,.6))
-    pt.plot([m+.25]*uboundaries[m].sum(), scdists[m][uboundaries[m]], 'k.')
-    pt.plot([m]*(1-uboundaries)[m].sum(), scdists[m][~uboundaries[m]], 'b.')
-pt.xlabel("region")
-pt.ylabel("distances to planes")
-pt.show()
+# # distances to all planes in each region
+# scdists = uweights @ X
+# for m in range(len(uweights)):
+#     pt.plot([m,m],[scdists[m].min(), scdists[m].max()], '-', color=(.6,.6,.6))
+#     pt.plot([m+.25]*uboundaries[m].sum(), scdists[m][uboundaries[m]], 'k.')
+#     pt.plot([m]*(1-uboundaries)[m].sum(), scdists[m][~uboundaries[m]], 'b.')
+# pt.xlabel("region")
+# pt.ylabel("distances to planes")
+# pt.show()
 
-rows, cols = (2,1) if N > 10 else (1, 2)
-pt.subplot(3,1,1)
-pt.imshow(dists.T if N > 10 else dists)
-pt.subplot(3,1,2)
-pt.imshow(uboundaries.T if N > 10 else uboundaries)
-pt.subplot(3,1,3)
-pt.imshow((spancond != uboundaries).T if N > 10 else spancond != uboundaries)
-pt.show()
+# rows, cols = (2,1) if N > 10 else (1, 2)
+# pt.subplot(3,1,1)
+# pt.imshow(dists.T if N > 10 else dists)
+# pt.subplot(3,1,2)
+# pt.imshow(uboundaries.T if N > 10 else uboundaries)
+# pt.subplot(3,1,3)
+# pt.imshow((spancond != uboundaries).T if N > 10 else spancond != uboundaries)
+# pt.show()
 
+print(f"inspan={inspan} + outspan={outspan} = {inspan+outspan}")
