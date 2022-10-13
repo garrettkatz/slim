@@ -11,10 +11,10 @@ data = np.array([
     [7, 1444, 282],
 ])
 
-pt.figure(figsize=(3,3))
+pt.figure(figsize=(2.5,2.5))
 pt.plot(data[:,0], data[:,1], 'o-', label="In span")
 pt.plot(data[2:,0], data[2:,2], 'o-', label="Out span") # exclude log(0)
-pt.xlabel("Number of neurons")
+pt.xlabel("No. of neurons")
 pt.ylabel("Threshold map pairs")
 pt.yscale("log")
 pt.xticks(data[:,0])
