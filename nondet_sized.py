@@ -163,4 +163,13 @@ if __name__ == "__main__":
         pass
     print(f"{perf_counter() - start} seconds")
 
-
+    # count tree test
+    def fn():
+        nodes = 1
+        for d in range(3):
+            numc = [nd.choice(range(3)) for _ in range(nodes)]
+            nodes = sum(numc)
+        return nodes
+    results = tuple(nd.runs(fn))
+    print(len(results))
+    assert len(results) == 1 + 13 + 13**2
