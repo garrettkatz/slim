@@ -18,8 +18,8 @@ def enumerate_ltms(N):
         print(f"{j} of {2**(N-1)}")
 
         Y = np.block([
-            [Y, +np.ones((Y.shape[0], 1))],
-            [Y, -np.ones((Y.shape[0], 1))]])
+            [Y, +np.ones((Y.shape[0], 1), dtype=int)],
+            [Y, -np.ones((Y.shape[0], 1), dtype=int)]])
 
         feasible = np.empty(Y.shape[0], dtype=bool)
         W = {}
@@ -42,8 +42,8 @@ def enumerate_ltms(N):
 
 if __name__ == "__main__":
 
-    # for N in range(3,6):
-    for N in range(3,4):
+    for N in range(3,6):
+    # for N in range(3,4):
         print(N)
 
         Y, W, X = enumerate_ltms(N)
