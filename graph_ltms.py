@@ -5,9 +5,16 @@ np.set_printoptions(threshold=10e6)
 
 if __name__ == "__main__":
 
-    N = 4
+    N = 3
     ltms = np.load(f"ltms_{N}.npz")
     Y, W, X = ltms["Y"], ltms["W"], ltms["X"]
+
+    # # rearrange antipodes to be opposite
+    # for i in range(Y.shape[0]//2):
+    #     j = Y.shape[0]//2 + (Y[i] == Y[Y.shape[0]//2:]).all(axis=1).argmax()
+    #     k = Y.shape[0] - i - 1
+    #     print(k,j)
+    #     Y[[j, k],:] = Y[[k, j],:]
 
     # label dichotomies by distance to identity regions
     sX = np.concatenate((X, -X), axis=0)
@@ -15,6 +22,9 @@ if __name__ == "__main__":
     udist = np.unique(dist)
     # print(sX)
     # print(np.concatenate((Y, dist[:,np.newaxis], W.round().astype(int)), axis=1))
+
+    for d in udist:
+        print(f"d = {d}: {(dist==d).sum()} regions")
 
     # get adjacencies for graph edges
     A = adjacency(Y, sym=True)

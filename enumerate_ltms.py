@@ -1,5 +1,6 @@
 import itertools as it
 import numpy as np
+import matplotlib.pyplot as pt
 from scipy.optimize import linprog, OptimizeWarning
 from scipy.linalg import LinAlgWarning
 import warnings
@@ -43,6 +44,7 @@ def enumerate_ltms(N):
 if __name__ == "__main__":
 
     for N in range(3,6):
+    # for N in range(3,5):
     # for N in range(3,4):
         print(N)
 
@@ -52,3 +54,17 @@ if __name__ == "__main__":
 
         print(W)
 
+    # # full X and Y
+    # X = np.array(tuple(it.product((-1, +1), repeat=N))).T
+    # Y = np.sign(W @ X)
+    # pad = 2
+    # YWX = np.full((Y.shape[0], Y.shape[1] + W.shape[1] + X.shape[1] + 2*pad), np.nan)
+    # YWX[:,:Y.shape[1]] = Y
+    # YWX[:,Y.shape[1]+pad:Y.shape[1]+pad+W.shape[1]] = W
+    # YWX[:X.shape[0], Y.shape[1]+pad+W.shape[1]+pad:] = X
+
+    # pt.imshow(YWX)
+    # pt.title("Y = sign(WX)")
+    # pt.axis('off')
+    # pt.colorbar()
+    # pt.show()
