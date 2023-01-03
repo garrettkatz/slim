@@ -39,7 +39,8 @@ if __name__ == "__main__":
                 pij = (tr.outer(W[i], W[j]) * P[k]).sum()
                 pii = (tr.outer(W[i], W[i]) * P[k]).sum()
                 pjj = (tr.outer(W[j], W[j]) * P[k]).sum()
-                loss_ij = (pij**2 - pii*pjj)**2
+                # loss_ij = (pij**2 - pii*pjj)**2
+                loss_ij = pii*pjj - pij**2 # norm prod is always >= dot product
                 losses.append(loss_ij)
         loss = tr.stack(losses).sum()
         loss.backward()

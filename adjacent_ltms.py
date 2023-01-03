@@ -1,7 +1,7 @@
 import numpy as np
 
 def adjacency(Y, sym=True):
-    A = {i: [] for i in range(Y.shape[0])} # rows (i,j) of Y that differ  in one column
+    A = {i: [] for i in range(Y.shape[0])} # rows (i,j) of Y that differ in one column
     K = {i: [] for i in range(Y.shape[0])} # columns k where they differ
 
     for i in range(Y.shape[0]-1):

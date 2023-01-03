@@ -158,7 +158,13 @@ for m in range(uhemis.shape[0]):
             A = np.stack((uweights[m], X[:,pos[b]])).T
             coefs = np.linalg.lstsq(A, wn, rcond=None)[0]
             ws = A @ coefs
-            spancond[m,pos[b]] = (ws.round() == wn.round()).all()
+
+            # # !!! without rounding, should match new versions
+            # spancond[m,pos[b]] = (ws.round() == wn.round()).all()
+
+            # !!! without rounding, should match new versions
+            spancond[m,pos[b]] = np.linalg.norm(ws - wn) < 0.1
+
             if spancond[m,pos[b]]: inspan += 1
             else: outspan += 1
             if not spancond[m,pos[b]]:
