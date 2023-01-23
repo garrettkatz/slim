@@ -23,7 +23,7 @@ if __name__ == "__main__":
     # num_updates = 2000
 
     N = 5 # dim
-    eps = 0.001 # constraint slack threshold
+    eps = 0.0001 # constraint slack threshold
     lr = 10. # learning rate
     num_updates = 2000
 
@@ -81,8 +81,8 @@ if __name__ == "__main__":
         delta = -W.grad
 
         # update and zero gradient for next iter
-        step_scale = lr
-        # step_scale = lr / (np.log(update+1) + 1)
+        step_scale = lr # N=4
+        step_scale = lr / (np.log(update+1) + 1) # N=5
         # step_scale = lr / (update+1)**.5
         W.data += delta * step_scale
         W.grad *= 0
