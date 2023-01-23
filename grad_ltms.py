@@ -16,14 +16,24 @@ options['show_progress'] = False
 
 if __name__ == "__main__":
 
-    N = 5
+    
+    # N = 4 # dim
+    # eps = 0.001 # constraint slack threshold
+    # lr = 0.1 # learning rate
+    # num_updates = 2000
+
+    N = 5 # dim
+    eps = 0.001 # constraint slack threshold
+    lr = 10. # learning rate
+    num_updates = 2000
+
     ltms = np.load(f"ltms_{N}.npz")
     Y, W, X = ltms["Y"], ltms["W"], ltms["X"]
 
-    eps = 0.0001
-
     # get adjacencies
-    A, K = adjacency(Y, sym=True)
+    # A, K = adjacency(Y, sym=True)
+    A, K = adjacency(Y, sym=False) # avoid redundancies
+    numcon = sum(map(len, A.values())) # number of constraints
 
     # wrap in tensors for grad opt
     W_lp = W
@@ -32,31 +42,42 @@ if __name__ == "__main__":
     Y = tr.tensor(Y).float()
     X = tr.tensor(X).float()
 
-    # form projection matrices
-    # P[j] = Proj_X[:,j]
-    Xt = X.t()
-    P = tr.eye(N) - Xt.unsqueeze(1) * Xt.unsqueeze(2) / N
+    # # form projection matrices
+    # # P[j] = Proj_X[:,j]
+    # Xt = X.t()
+    # P = tr.eye(N) - Xt.unsqueeze(1) * Xt.unsqueeze(2) / N
 
     # gradient update loop
-    num_updates = 1000
-    lr = 0.002
-    # lr = 1
     loss_curve = []
     extr_curve = []
     for update in range(num_updates):
 
         # differentiate loss function
-        losses = []
+        # losses = []
+        loss = 0
         for i in A:
             for j, k in zip(A[i], K[i]):
-                pij = (tr.outer(W[i], W[j]) * P[k]).sum()
-                pii = (tr.outer(W[i], W[i]) * P[k]).sum()
-                pjj = (tr.outer(W[j], W[j]) * P[k]).sum()
+                Pi = W[i] - tr.dot(W[i], X[:,k])*X[:,k] / N
+                Pj = W[j] - tr.dot(W[j], X[:,k])*X[:,k] / N
+                pij = tr.dot(Pi, Pj)
+                pii = tr.dot(Pi, Pi)
+                pjj = tr.dot(Pj, Pj)
+
+                # pij = (tr.outer(W[i], W[j]) * P[k]).sum()
+                # pii = (tr.outer(W[i], W[i]) * P[k]).sum()
+                # pjj = (tr.outer(W[j], W[j]) * P[k]).sum()
+
                 # loss_ij = (pij**2 - pii*pjj)**2
                 loss_ij = pii*pjj - pij**2 # norm prod is always >= dot product
-                losses.append(loss_ij)
-        loss = tr.stack(losses).sum()
-        loss.backward()
+                # losses.append(loss_ij)
+
+                loss_ij /= numcon
+                loss_ij.backward()
+                loss += loss_ij.detach()
+
+        # loss = tr.stack(losses).sum()
+        # loss = tr.stack(losses).mean()
+        # loss.backward()
         delta = -W.grad
 
         # update and zero gradient for next iter
