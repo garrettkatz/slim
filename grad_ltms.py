@@ -95,6 +95,7 @@ if __name__ == "__main__":
     
             else:
                 # project back to constraint set
+                # min |W - W'| s.t. W' in convex cone
                 for i in range(len(W)):
                     result = qp(
                         P = matrix(np.eye(len(W[i]))),
