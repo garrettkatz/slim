@@ -3,6 +3,7 @@ import torch as tr
 import numpy as np
 from adjacent_ltms import adjacency
 import matplotlib.pyplot as pt
+import matplotlib as mp
 from cvxopt.solvers import qp, options
 from cvxopt import matrix
 
@@ -15,17 +16,19 @@ from cvxopt import matrix
 np.set_printoptions(threshold=10e6)
 options['show_progress'] = False
 
+mp.rcParams['font.family'] = 'serif'
+
 if __name__ == "__main__":
     
-    # N = 4 # dim
-    # eps = 0.001 # constraint slack threshold
-    # lr = 0.1 # learning rate
-    # num_updates = 2000
-
-    N = 5 # dim
-    eps = 0.0001 # constraint slack threshold
-    lr = 5. # learning rate
+    N = 4 # dim
+    eps = 0.001 # constraint slack threshold
+    lr = 0.1 # learning rate
     num_updates = 2000
+
+    # N = 5 # dim
+    # eps = 0.0001 # constraint slack threshold
+    # lr = 5. # learning rate
+    # num_updates = 2000
 
     ltms = np.load(f"ltms_{N}.npz")
     Y, W, X = ltms["Y"], ltms["W"], ltms["X"]
@@ -47,7 +50,8 @@ if __name__ == "__main__":
     # Xt = X.t()
     # P = tr.eye(N) - Xt.unsqueeze(1) * Xt.unsqueeze(2) / N
 
-    if True:
+    # if True: # do training
+    if False: # just load results
 
         # gradient update loop
         loss_curve = []
@@ -84,7 +88,7 @@ if __name__ == "__main__":
     
             # update and zero gradient for next iter
             step_scale = lr # N=4
-            step_scale = lr / (np.log(update+1) + 1) # N=5
+            # step_scale = lr / (np.log(update+1) + 1) # N=5
             # step_scale = lr / (update+1)**.5
             W.data += delta * step_scale
             W.grad *= 0
@@ -130,15 +134,16 @@ if __name__ == "__main__":
         (loss_curve, extr_curve) = pk.load(f)
 
     for do_log in (False, True):
-        pt.figure(figsize=(3,6))
+        pt.figure(figsize=(3,3))
         pt.subplot(2,1,1)
-        pt.plot(loss_curve)
-        pt.ylabel("loss")
+        pt.plot(loss_curve, 'k-')
+        pt.ylabel("Span Loss")
         if do_log: pt.yscale('log')
         pt.subplot(2,1,2)
-        pt.plot(extr_curve)
-        pt.ylabel("constraint slack")
+        pt.plot(extr_curve, 'k-')
+        pt.ylabel("Constraint Slack")
         if do_log: pt.yscale('log')
-        pt.xlabel("update")
+        pt.xlabel("Optimization Step")
         pt.tight_layout()
-        pt.show()    
+        pt.savefig(f"result_grad_ltm_{N}.png")
+        pt.show()
