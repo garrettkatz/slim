@@ -1,8 +1,10 @@
 import numpy as np
 from adjacent_ltms import adjacency
 import matplotlib.pyplot as pt
+import matplotlib as mp
 
 np.set_printoptions(threshold=10e6)
+mp.rcParams['font.family'] = 'serif'
 
 if __name__ == "__main__":
 
@@ -28,6 +30,7 @@ if __name__ == "__main__":
                 r = np.linalg.norm(w @ ab - x)
                 residuals[N].append(r)
 
+    pt.figure(figsize=(3,2))
     parts = pt.violinplot([residuals[N] for N in Ns], Ns, widths=.8)
     for pc in parts['bodies']:
         pc.set_edgecolor('black')
@@ -40,5 +43,8 @@ if __name__ == "__main__":
             np.random.uniform(-.01, .01, M) + N,
             np.random.uniform(-.01, .01, M) + np.array(residuals[N]),
             'k.')
+    pt.xlabel('Number of synapses N')
+    pt.ylabel('Span residual')
+    pt.tight_layout()
     pt.show()
 
