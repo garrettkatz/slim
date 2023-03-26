@@ -44,17 +44,18 @@ if __name__ == "__main__":
     print(A_ub.shape, A_eq.shape)
     print(R, E, N*R, 2**(N-1) * R, N*E, N*R + E)
 
-    pt.subplot(1,2,1)
-    pt.imshow(A_ub.toarray())
-    pt.subplot(1,2,2)
-    pt.imshow(A_eq.toarray())
-    pt.show()
+    if N <= 4:
+        pt.subplot(1,2,1)
+        pt.imshow(A_ub.toarray())
+        pt.subplot(1,2,2)
+        pt.imshow(A_eq.toarray())
+        pt.show()
+        # A_ub = A_ub.toarray()
+        # A_eq = A_eq.toarray()
 
-    A_ub = A_ub.toarray()
-    A_eq = A_eq.toarray()
-
-    result = linprog(c, A_ub, b_ub, A_eq, b_eq, bounds = (None, None), method = "highs")
-    print(result.status)
+    # result = linprog(c, A_ub, b_ub, A_eq, b_eq, bounds = (None, None), method = "highs")
+    result = linprog(c, A_ub, b_ub, bounds = (None, None), method = "highs")
+    print(result.message)
 
     W = result.x[:R*N].reshape((R, N))
     β = result.x[R*N:]
