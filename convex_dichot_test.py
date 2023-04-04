@@ -47,12 +47,17 @@ if __name__ == "__main__":
         wP[2,i] = a*wP[0,i] + (1-a)*wP[1,i]
         wP[2,j] = a*wP[0,j] + (1-a)*wP[1,j]
 
-        d0 = wP[0,i].T @ wP[0,j] / (np.linalg.norm(wP[0,i]) * np.linalg.norm(wP[0, j]))
-        d1 = wP[1,i].T @ wP[1,j] / (np.linalg.norm(wP[1,i]) * np.linalg.norm(wP[1, j]))
-        d2 = wP[2,i].T @ wP[2,j] / (np.linalg.norm(wP[2,i]) * np.linalg.norm(wP[2, j]))
-        da = a*d0 + (1-a)*d1
+        # d0 = (wP[0,i].T @ wP[0,j] / (np.linalg.norm(wP[0,i]) * np.linalg.norm(wP[0, j])))**2
+        # d1 = (wP[1,i].T @ wP[1,j] / (np.linalg.norm(wP[1,i]) * np.linalg.norm(wP[1, j])))**2
+        # d2 = (wP[2,i].T @ wP[2,j] / (np.linalg.norm(wP[2,i]) * np.linalg.norm(wP[2, j])))**2
+        # da = a*d0 + (1-a)*d1
+        # assert d2 >= da
 
-        assert d2 >= da
+        f0 = (np.linalg.norm(wP[0,i]) * np.linalg.norm(wP[0, j]))**2 - (wP[0,i].T @ wP[0,j])**2
+        f1 = (np.linalg.norm(wP[1,i]) * np.linalg.norm(wP[1, j]))**2 - (wP[1,i].T @ wP[1,j])**2
+        f2 = (np.linalg.norm(wP[2,i]) * np.linalg.norm(wP[2, j]))**2 - (wP[2,i].T @ wP[2,j])**2
+        fa = a*f0 + (1-a)*f1
+        assert f2 <= fa
 
 
 
