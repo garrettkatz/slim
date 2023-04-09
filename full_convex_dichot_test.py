@@ -55,9 +55,17 @@ if __name__ == "__main__":
         for q, i in it.product((0, 1, 2), range(len(Y))):
             for j, k in zip(A[i], K[i]):
                 # if np.random.rand() < 0.9: continue # not convex after this, need them all
+
+                # wi, wj, xk = W[q][i], W[q][j], X[:,k]
+                # Pk = np.eye(N) - xk[:,np.newaxis] * xk / N
+                # # f[q] += norm(wi)*norm(wj) - wi @ Pk @ wj # this is a bug!!! need Pk in the norms too!
+                # f[q] += norm(wi @ Pk)*norm(wj @ Pk) - wi @ Pk @ wj
+
+                # less computation
                 wi, wj, xk = W[q][i], W[q][j], X[:,k]
-                Pk = np.eye(N) - xk[:,np.newaxis] * xk / N
-                f[q] += norm(wi)*norm(wj) - wi @ Pk @ wj
+                wiPk = wi - (wi @ xk) * xk / N
+                wjPk = wj - (wj @ xk) * xk / N
+                f[q] += norm(wiPk)*norm(wjPk) - wiPk @ wjPk
 
         # convex?
         fa = f[2]
