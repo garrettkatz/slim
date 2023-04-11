@@ -53,8 +53,8 @@ if __name__ == "__main__":
         # A_ub = A_ub.toarray()
         # A_eq = A_eq.toarray()
 
-    # result = linprog(c, A_ub, b_ub, A_eq, b_eq, bounds = (None, None), method = "highs")
-    result = linprog(c, A_ub, b_ub, bounds = (None, None), method = "highs")
+    result = linprog(c, A_ub, b_ub, A_eq, b_eq, bounds = (None, None), method = "highs") # infeasible
+    # result = linprog(c, A_ub, b_ub, bounds = (None, None), method = "highs")
     print(result.message)
 
     W = result.x[:R*N].reshape((R, N))
