@@ -49,11 +49,13 @@ def F_factory(Y, W0, X, A, K, eps):
             # evaluate span loss and derivative
             f = 0.
             DW = np.zeros(W.shape)
+            H = np.zeros((M, M, N, N))
             for i in range(M):
                 for j, k in zip(A[i], K[i]):
 
                     # precompute recurring terms
                     wi, wj, xk = W[i], W[j], X[:,k]
+                    Pk = np.eye(N) - xk.reshape((N, 1)) * xk / N # need for hessian
                     wiPk = wi - (wi @ xk) * xk / N
                     wjPk = wj - (wj @ xk) * xk / N
                     wiPk_n, wjPk_n = norm(wiPk), norm(wjPk)
@@ -61,9 +63,16 @@ def F_factory(Y, W0, X, A, K, eps):
                     # accumulate span loss
                     f += wiPk_n*wjPk_n - wiPk @ wjPk
 
-                    # accumulate gradient
-                    DW[i] += wiPk * wjPk_n / wiPk_n - wjPk
-                    DW[j] += wjPk * wiPk_n  / wjPk_n - wiPk
+                    # # accumulate gradient (one way, A sym False)
+                    # DW[i] += wiPk * wjPk_n / wiPk_n - wjPk
+                    # DW[j] += wjPk * wiPk_n  / wjPk_n - wiPk
+
+                    # accumulate gradient (other way, when A sym=True)
+                    DW[i] += 2 * (wiPk * wjPk_n / wiPk_n - wjPk)
+
+                    # accumulate hessian
+                    H[i,i] += 2 * (wjPk_n / wiPk_n) * (Pk - wiPk.reshape((N, 1)) * wiPk / wiPk_n**2)
+                    H[i,j] += 2 * (wjPk.reshape((N, 1)) * wiPk / (wjPk_n * wiPk_n) - Pk)
 
             # flatten gradient
             Df = np.concatenate((DW.flat, np.zeros(S.size)))[np.newaxis,:]
@@ -82,7 +91,8 @@ if __name__ == "__main__":
     N = 4
     ltms = np.load(f"ltms_{N}.npz")
     Y, W, X = ltms["Y"], ltms["W"], ltms["X"]
-    A, K = adjacency(Y, sym=False) # sym=False just halves the objective function
+    # A, K = adjacency(Y, sym=False) # sym=False just halves the objective function
+    A, K = adjacency(Y, sym=True) # for "other way" of hand-calced gradient
 
     F = F_factory(Y, W, X, A, K, eps=1.)
 
