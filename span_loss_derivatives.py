@@ -4,6 +4,7 @@ from adjacent_ltms import adjacency
 import itertools as it
 import matplotlib.pyplot as pt
 import matplotlib as mp
+import scipy.sparse as sp
 from scipy.optimize import linprog, OptimizeWarning
 from scipy.linalg import LinAlgWarning
 import warnings
@@ -11,7 +12,7 @@ import warnings
 warnings.filterwarnings("ignore", category=LinAlgWarning)
 warnings.filterwarnings("ignore", category=OptimizeWarning)
 
-np.set_printoptions(threshold=10e6)
+# np.set_printoptions(threshold=10e6)
 mp.rcParams['font.family'] = 'serif'
 
 # cvxopt function factory
@@ -23,7 +24,7 @@ def F_factory(Y, W0, X, A, K, eps):
 
     def F(x=None, z=None):
 
-        if (x is None) and (z is None):
+        if x is None:
 
             # initial non-negative slacks
             S = np.empty((M, V))
@@ -35,7 +36,7 @@ def F_factory(Y, W0, X, A, K, eps):
 
             return 0, x0 # 0 non-linear constraints
 
-        if z is None:
+        else:
 
             # extract variables
             W = x[:M*N].reshape((M, N))
@@ -46,11 +47,18 @@ def F_factory(Y, W0, X, A, K, eps):
             #     if (W[m] @ (X * Y[m]) - S[m] != eps).any():
             #         return None
 
-            # evaluate span loss and derivative
+            # evaluate span loss and derivatives
             f = 0.
             DW = np.zeros(W.shape)
-            H = np.zeros((M, M, N, N))
+            if z is not None:
+                H = [[None for _ in range(M+1)] for _ in range(M+1)]
+                H[-1][-1] = sp.csr_array((S.size, S.size))
             for i in range(M):
+
+                if z is not None:
+                    # accumulate hessian diagonal blocks
+                    H[i][i] = sp.csr_matrix((N, N))
+
                 for j, k in zip(A[i], K[i]):
 
                     # precompute recurring terms
@@ -70,14 +78,20 @@ def F_factory(Y, W0, X, A, K, eps):
                     # accumulate gradient (other way, when A sym=True)
                     DW[i] += 2 * (wiPk * wjPk_n / wiPk_n - wjPk)
 
-                    # accumulate hessian
-                    H[i,i] += 2 * (wjPk_n / wiPk_n) * (Pk - wiPk.reshape((N, 1)) * wiPk / wiPk_n**2)
-                    H[i,j] += 2 * (wjPk.reshape((N, 1)) * wiPk / (wjPk_n * wiPk_n) - Pk)
+                    # hessian blocks
+                    if z is not None:
+                        H[i][i] += z * 2 * (wjPk_n / wiPk_n) * (Pk - wiPk.reshape((N, 1)) * wiPk / wiPk_n**2)
+                        # H[i][j]  = z * 2 * (wjPk.reshape((N, 1)) * wiPk / (wjPk_n * wiPk_n) - Pk)
+                        H[i][j]  = z * 2 * (wiPk.reshape((N, 1)) * wjPk / (wiPk_n * wjPk_n) - Pk) # this is the right one, according to pytorch
 
             # flatten gradient
             Df = np.concatenate((DW.flat, np.zeros(S.size)))[np.newaxis,:]
 
-            return f, Df
+            # convert hessian
+            H = sp.bmat(H, format='csr')
+
+            return (f, Df) if z is None else (f, Df, H)
+                
 
         # at this point neither x nor z are None
         # calculate H, square dense/sparse matrix whose lower triangular part is z * Hessian(span loss)
@@ -88,7 +102,7 @@ def F_factory(Y, W0, X, A, K, eps):
 
 if __name__ == "__main__":
 
-    N = 4
+    N = 3
     ltms = np.load(f"ltms_{N}.npz")
     Y, W, X = ltms["Y"], ltms["W"], ltms["X"]
     # A, K = adjacency(Y, sym=False) # sym=False just halves the objective function
@@ -97,8 +111,16 @@ if __name__ == "__main__":
     F = F_factory(Y, W, X, A, K, eps=1.)
 
     _, x0 = F()
-    f, Df = F(x0)
+    f, Df, H = F(x0, 1)
     DW = Df[0, :W.size].reshape(W.shape)
+    H = H.toarray()[:W.size, :W.size]
+
+    # print(H.shape)
+    # pt.subplot(1,2,1)
+    # pt.imshow(DW)
+    # pt.subplot(1,2,2)
+    # pt.imshow(H.toarray() != 0.)
+    # pt.show()
 
     print(f"span loss = {f}")
     # print(Df)
@@ -129,6 +151,34 @@ if __name__ == "__main__":
         print("torch DW:")
         print(W.grad.numpy())
     print(f"pytorch error = {np.fabs(DW - W.grad.numpy()).max()}")
+
+    def span_loss(*ws):
+        loss = tr.tensor(0.)
+        for i in range(len(ws)):
+            for j, k in zip(A[i], K[i]):
+    
+                # precompute recurring terms
+                wi, wj, xk = ws[i], ws[j], X[:,k]
+                wiPk = wi - (wi @ xk) * xk / N
+                wjPk = wj - (wj @ xk) * xk / N
+                wiPk_n, wjPk_n = tr.linalg.norm(wiPk), tr.linalg.norm(wjPk)
+    
+                # accumulate loss
+                loss += wiPk_n*wjPk_n - wiPk @ wjPk
+        return loss
+
+    ws = tuple(w.clone().detach() for w in W)
+    tH = tr.autograd.functional.hessian(span_loss, ws)
+    tH = tr.vstack(tuple(map(tr.hstack, tH)))
+
+    print(f"pytorch H error = {np.fabs(H - tH.numpy()).max()}")
+
+    pt.subplot(1,2,1)
+    pt.imshow(H)
+    pt.subplot(1,2,2)
+    pt.imshow(tH)
+    pt.show()
+
 
     # for G see cvxopt floor planning example under:
     # https://cvxopt.org/userguide/solvers.html#cvxopt.solvers.cpl
