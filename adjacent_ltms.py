@@ -39,9 +39,15 @@ if __name__ == "__main__":
     print(MA)
     print(MK)
 
+    for k in range(2**(N-1)):
+        print(f"{k}: {(MK==k).sum()}")
+
     pt.subplot(1,2,1)
     pt.imshow(MA)
     pt.subplot(1,2,2)
     pt.imshow(MK)
+    for i in A:
+        for j,k in zip(A[i], K[i]):
+            pt.text(i, j, k)
     pt.show()
     
