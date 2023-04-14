@@ -107,10 +107,21 @@ print(dims['l'])
 
 sol = solvers.cp(F, G, h, dims, A_eq, b_eq)
 
-f, Df = F(sol['x'])
-print('w', np.fabs(np.array(sol['x'])[:M*N]).min(), np.fabs(np.array(sol['x'])[:M*N]).max())
-print("f", f)
-print("|Df|", norm(np.array(Df)))
+W_bad = np.array(sol['x'][:M*N]).reshape((M, N))
+loss, grad, hess = calc_derivatives(Y, W_bad, X, A, K)
 
 print('status', sol['status'])
+print('w', np.fabs(np.array(W_bad)).min(), np.fabs(np.array(W_bad)).max())
+print("f", loss)
+print("|Df|", norm(grad.flat))
+
+# check hessian psd at failure point
+
+H = sp.bmat(hess).toarray()
+
+# f, Df, H = F(sol['x'], z=1)
+# H = np.array(matrix(H))
+
+eigs = np.linalg.eigvalsh(H)
+print('eigs', eigs.min(), eigs.max())
 
