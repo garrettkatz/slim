@@ -5,8 +5,8 @@ from scipy.optimize import linprog, OptimizeWarning
 from scipy.linalg import LinAlgWarning
 import warnings
 
-warnings.filterwarnings("ignore", category=LinAlgWarning)
-warnings.filterwarnings("ignore", category=OptimizeWarning)
+# warnings.filterwarnings("ignore", category=LinAlgWarning)
+# warnings.filterwarnings("ignore", category=OptimizeWarning)
 np.set_printoptions(formatter={"int": lambda x: "%+d" % x}, linewidth=1000)
 
 def enumerate_ltms(N):
@@ -32,8 +32,11 @@ def enumerate_ltms(N):
                 b_ub = -np.ones(j+1),
                 bounds = (None, None),
             )
-            W[k] = result.x
-            feasible[k] = (np.sign(W[k] @ X[:,:j+1]) == y).all()
+            if result.x is not None:
+                W[k] = result.x
+                feasible[k] = (np.sign(W[k] @ X[:,:j+1]) == y).all() # sanity check
+            else:
+                feasible[k] = False
 
         Y = Y[feasible]
 
@@ -43,8 +46,8 @@ def enumerate_ltms(N):
 
 if __name__ == "__main__":
 
-    for N in range(3,6):
-    # for N in range(3,5):
+    # for N in range(3,6):
+    for N in range(3,5):
     # for N in range(3,4):
         print(N)
 
@@ -52,7 +55,7 @@ if __name__ == "__main__":
         print(Y.shape, W.shape, X.shape)
         np.savez(f"ltms_{N}.npz", Y=Y, W=W, X=X)
 
-        print(W)
+        # print(W)
 
     # # full X and Y
     # X = np.array(tuple(it.product((-1, +1), repeat=N))).T
