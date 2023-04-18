@@ -57,8 +57,8 @@ def calc_derivatives(Y, W, X, A, K):
             grad[i] += 4 * wiPk * (wjPk_n ** 2) - 4 * (wiPk @ wjPk) * wjPk
 
             # hessian blocks
-            hess[i][i] += 4 * Pk * (wjPk_n ** 2) - 4 * Pk @ (wjPk.reshape((N, 1)) * wjPk) 
-            hess[i][j]  = 4 * Pk @ (wiPk.reshape((N, 1)) * wjPk) 
+            hess[i][i] += 4 * Pk * (wjPk_n ** 2) - 4 * wjPk.reshape((N, 1)) * wjPk
+            hess[i][j]  = 4 * (2 * wiPk.reshape((N, 1)) * wjPk - wjPk.reshape((N, 1)) * wiPk - Pk * (wiPk @ wjPk))
 
     # print(f'|wiPk| >= {min_norm}')
 
@@ -122,25 +122,27 @@ if __name__ == "__main__":
                 wi, wj, xk = ws[i], ws[j], X[:,k]
                 wiPk = wi - (wi @ xk) * xk / N
                 wjPk = wj - (wj @ xk) * xk / N
-                wiPk_n, wjPk_n = tr.linalg.norm(wiPk), tr.linalg.norm(wjPk)
+                # wiPk_n, wjPk_n = tr.linalg.norm(wiPk), tr.linalg.norm(wjPk)
     
                 # accumulate loss
-                loss += wiPk_n*wjPk_n - wiPk @ wjPk
+                # loss += wiPk_n*wjPk_n - wiPk @ wjPk
+                loss += (wiPk @ wiPk) * (wjPk @ wjPk) - (wiPk @ wjPk)**2
+
         return loss
 
     ws = tuple(w.clone().detach() for w in W)
     tH = tr.autograd.functional.hessian(span_loss, ws)
-    tH = tr.vstack(tuple(map(tr.hstack, tH)))
+    tH = tr.vstack(tuple(map(tr.hstack, tH))).numpy()
 
-    print(f"pytorch H error = {np.fabs(H - tH.numpy()).max()}")
+    print(f"pytorch H error = {np.fabs(H - tH).max()}")
 
-    # # quick check on off-chance hessian is itself an orthogonal projection?
-    # HH = H @ H
-    # print(f"|HH - H| <= {np.fabs(HH - H).max()}")
-    # print(f"|HH[H == 0]| <= {np.fabs(HH[H == 0]).max()}")
+    # quick check on off-chance hessian is itself an orthogonal projection?
+    HH = H @ H
+    print(f"|HH - H| <= {np.fabs(HH - H).max()}")
+    print(f"|HH[H == 0]| <= {np.fabs(HH[H == 0]).max()}")
 
     # imgs = [H, tH, HH]
-    imgs = [H, tH]
+    imgs = [H, tH, np.fabs(H - tH)]
 
     for i, img in enumerate(imgs):
         pt.subplot(1,len(imgs),i+1)
