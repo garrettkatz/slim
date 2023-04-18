@@ -9,7 +9,8 @@ from scipy.optimize import linprog, OptimizeWarning
 from scipy.linalg import LinAlgWarning
 import warnings
 
-from span_loss_derivatives import calc_derivatives
+# from span_loss_derivatives import calc_derivatives
+from sq_span_loss_derivatives import calc_derivatives
 from cvxopt import matrix, spmatrix, sparse, spdiag, solvers
 
 warnings.filterwarnings("ignore", category=LinAlgWarning)
