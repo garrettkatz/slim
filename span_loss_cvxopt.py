@@ -30,7 +30,7 @@ M, N = W.shape
 V = X.shape[1]
 
 # minimum slack
-eps = .05 # linprog used 1, but small numerical errors
+eps = .5 # linprog used 1, but small numerical errors
 
 # save initial feasible point
 W0 = W
@@ -77,7 +77,16 @@ def F(x=None, z=None):
         H[-1][-1] = spmatrix([], [], [], (M*V, M*V))
         H = sparse(H)
 
-        # print("H", H.size)
+        print("H", H.size)
+        print("MN", M*N)
+        print("rank(H)", np.linalg.matrix_rank(np.array(matrix(H))))
+
+        HAG = np.concatenate((
+            np.array(matrix(H)), 
+            np.array(matrix(A_eq)),
+            np.array(matrix(G)),
+        ), axis=0)
+        print("HAG size, rank", HAG.shape, np.linalg.matrix_rank(HAG)) 
 
         return (f, Df, H)
 
@@ -105,6 +114,13 @@ print("h", h.size)
 print("A_eq", A_eq.size)
 print("b_eq", b_eq.size)
 print(dims['l'])
+
+# rank conditions:
+# A_eq should be full row rank (p rows, rank p)
+# [H, A.T, G.T] should be full row rank (n rows, rank n)
+
+print("Rank G: ", np.linalg.matrix_rank(np.array(matrix(G))))
+print("Rank A_eq: ", np.linalg.matrix_rank(np.array(matrix(A_eq))))
 
 sol = solvers.cp(F, G, h, dims, A_eq, b_eq)
 

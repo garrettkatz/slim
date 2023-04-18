@@ -20,20 +20,23 @@ mp.rcParams['font.family'] = 'serif'
 # grad: (M,N) numpy array; grad[m] is dL / dW[m]
 # hess: (M,M) list of lists.  hess[i][j] is None if all zeros else (N,N) numpy array d2L / (dW[i] dW[j])
 # expects A, K from sym=True
-def calc_derivatives(Y, W, X, A, K):
+def calc_derivatives(Y, W, X, A, K, out=('loss','grad','hess')):
 
     M, N = W.shape # number of ltms, dimensions
     V = X.shape[1] # number of vertices (V == 2**(N-1))
 
     loss = 0.
-    grad = np.zeros(W.shape)
-    hess = [[None for _ in range(M)] for _ in range(M)]
+    if 'grad' in out:
+        grad = np.zeros(W.shape)
+    if 'hess' in out:
+        hess = [[None for _ in range(M)] for _ in range(M)]
 
     min_norm = np.inf
     for i in range(M):
 
         # accumulate hessian diagonal blocks
-        hess[i][i] = np.zeros((N, N))
+        if 'hess' in out:
+            hess[i][i] = np.zeros((N, N))
 
         for j, k in zip(A[i], K[i]):
 
@@ -54,15 +57,21 @@ def calc_derivatives(Y, W, X, A, K):
             # grad[j] += wjPk * wiPk_n  / wjPk_n - wiPk
 
             # accumulate gradient (other way, when A sym=True)
-            grad[i] += 4 * wiPk * (wjPk_n ** 2) - 4 * (wiPk @ wjPk) * wjPk
+            if 'grad' in out:
+                grad[i] += 4 * wiPk * (wjPk_n ** 2) - 4 * (wiPk @ wjPk) * wjPk
 
             # hessian blocks
-            hess[i][i] += 4 * Pk * (wjPk_n ** 2) - 4 * wjPk.reshape((N, 1)) * wjPk
-            hess[i][j]  = 4 * (2 * wiPk.reshape((N, 1)) * wjPk - wjPk.reshape((N, 1)) * wiPk - Pk * (wiPk @ wjPk))
+            if 'hess' in out:
+                hess[i][i] += 4 * Pk * (wjPk_n ** 2) - 4 * wjPk.reshape((N, 1)) * wjPk
+                hess[i][j]  = 4 * (2 * wiPk.reshape((N, 1)) * wjPk - wjPk.reshape((N, 1)) * wiPk - Pk * (wiPk @ wjPk))
 
     # print(f'|wiPk| >= {min_norm}')
 
-    return loss, grad, hess
+    result = (loss,)
+    if 'grad' in out: result += (grad,)
+    if 'hess' in out: result += (hess,)
+
+    return result
 
 if __name__ == "__main__":
 
