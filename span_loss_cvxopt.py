@@ -35,6 +35,9 @@ eps = .5 # linprog used 1, but small numerical errors
 # save initial feasible point
 W0 = W
 
+# and its sqnorms
+sqnorms = (W0**2).sum(axis=1)
+
 def F(x=None, z=None):
 
     if x is None:
@@ -106,8 +109,16 @@ dims = {
 
 zeros = spmatrix([], [], [], (V,N))
 YX = sparse([[zeros if i != j else matrix((X * Y[j]).T) for i in range(M)] for j in range(M)])
-A_eq = sparse([[YX], [spdiag([-1]*M*V)]]) # Y[m] X.T @ W[m] - S[m]
-b_eq = matrix([eps]*M*V) # = eps
+
+# A_eq = sparse([[YX], [spdiag([-1]*M*V)]]) # Y[m] X.T @ W[m] - S[m]
+# b_eq = matrix([eps]*M*V) # = eps
+
+# append sqnorm equality constraints
+zeros = spmatrix([], [], [], (1,N))
+W0D = sparse([[zeros if i != j else matrix(W0[j:j+1]) for i in range(M)] for j in range(M)])
+
+A_eq = sparse([[YX, W0D], [spdiag([-1]*M*V), spmatrix([], [], [], (M, M*V))]])
+b_eq = matrix([eps]*M*V + list(sqnorms))
 
 print("G", G.size)
 print("h", h.size)
