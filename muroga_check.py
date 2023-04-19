@@ -68,4 +68,6 @@ print(np.fabs(Xh[~boundaries] @ wc).min())
 
 # looks like w @ Xb = 1 does not generalize past N=7.
 # however, perhaps w @ Xb <= 2, w @ X~b >= 3? maybe minimum L2 norm w?
+# also wonder if wc is invariant under hypercube symmetries that leave its region invariant. wa and wb definitely are not.
+
 
