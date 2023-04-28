@@ -2,46 +2,36 @@ import numpy as np
 import pyvista
 import pyvistaqt as pvqt
 import matplotlib.pyplot as pt
-
-mesh = pyvista.Plane().triangulate()
-submesh = mesh.subdivide(2, 'linear')
-# submesh.plot(show_edges=True)
-
-circle = pyvista.Circle()
-# circle.plot(show_edges=False)
+from scipy.spatial.transform import Rotation
 
 p = pvqt.BackgroundPlotter(show=False)
-p.add_mesh(submesh)
-p.add_mesh(circle)
-# p.add_arrows(cent = np.array([[0, 0, 0]]), direction=np.array([[0, 0, 1]]), mag = 1, show_scalar_bar=False)
-p.add_mesh(pyvista.Arrow(start=(0, 0, 0), direction=(0, 0, 1), tip_length=0.1, tip_radius=0.05, tip_resolution=50, shaft_radius=0.025, shaft_resolution=50, scale=None))
+# p = pyvista.Plotter()
 
-# try this instead:
-# https://docs.pyvista.org/version/stable/api/plotting/_autosummary/pyvista.Plotter.add_point_labels.html#add-point-labels
-# p.add_text("z", position=(0, 0, 1), font_size=18, color=None, font=None, shadow=False, name=None, viewport=False, orientation=0.0, render=True)
+X = np.array([[1,1,1],[-1,1,1],[1,-1,1],[1,1,-1]]).astype(float)
 
+for k,x in enumerate(X):
+
+    rot, _ = Rotation.align_vectors(a=x.reshape(1,-1), b=np.array([[0,0,1]]))
+    M = np.eye(4)
+    M[:3,:3] = rot.as_matrix()
+    
+    circle = pyvista.Circle(radius=1, resolution=100).transform(M)
+    outline = pyvista.MultipleLines(np.vstack((circle.points, circle.points[:1])))
+    arrow = pyvista.Arrow(start=(0, 0, 0), direction=x.flat, tip_length=0.1, tip_radius=0.05, tip_resolution=3, shaft_radius=0.025, shaft_resolution=50, scale=None)
+    
+    p.add_mesh(circle, color=(.5,)*3, opacity=.5, show_edges=False)
+    p.add_mesh(outline, color=(0,)*3, opacity=1, show_edges=True, line_width=20, edge_color='black')
+    p.add_mesh(arrow)
+
+    # # only seems to show when screenshot scale is 1
+    # p.add_point_labels(np.array([[0., 0., 1.]]), ["z"], font_size=50, text_color='black', font_family=None, shadow=False, show_points=False, shape=None, shape_opacity=1, always_visible=True)
+    
+# img = p.image
 img = p.screenshot(transparent_background=True, scale=10)
 
+# input('.')
+
 pt.imshow(img)
+pt.axis('off')
 pt.show()
 
-# p.show_bounds(grid=True, location='back')
-# p.show()
-
-# # Make a grid
-# x, y, z = np.meshgrid(np.linspace(-5, 5, 20),
-#                       np.linspace(-5, 5, 20),
-#                       np.linspace(-5, 5, 5))
-
-# points = np.empty((x.size, 3))
-# points[:, 0] = x.ravel('F')
-# points[:, 1] = y.ravel('F')
-# points[:, 2] = z.ravel('F')
-
-# # Compute a direction for the vector field
-# direction = np.sin(points)**3
-
-# # plot using the plotting class
-# pl = pyvista.Plotter()
-# pl.add_arrows(points, direction, 0.5)
-# pl.show()
