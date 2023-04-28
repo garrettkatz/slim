@@ -47,8 +47,9 @@ def enumerate_ltms(N):
 if __name__ == "__main__":
 
     # for N in range(3,6):
-    for N in range(3,5):
+    # for N in range(3,5):
     # for N in range(3,4):
+    for N in range(6, 7):
         print(N)
 
         Y, W, X = enumerate_ltms(N)

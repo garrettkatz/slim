@@ -50,8 +50,8 @@ if __name__ == "__main__":
     # Xt = X.t()
     # P = tr.eye(N) - Xt.unsqueeze(1) * Xt.unsqueeze(2) / N
 
-    # if True: # do training
-    if False: # just load results
+    if True: # do training
+    # if False: # just load results
 
         # gradient update loop
         loss_curve = []
@@ -93,11 +93,8 @@ if __name__ == "__main__":
             W.data += delta * step_scale
             W.grad *= 0
     
-            feasible = (tr.mm(W, X) * Y >= eps).all().item()
-            if feasible:
-                print('feasible step preproj')
-    
-            else:
+            feasible_preproj = (tr.mm(W, X) * Y >= eps).all().item()
+            if not feasible_preproj:
                 # project back to constraint set
                 # min |W - W'| s.t. W' in convex cone
                 for i in range(len(W)):
@@ -118,7 +115,9 @@ if __name__ == "__main__":
             # check distance to feasible boundary
             extreme = tr.mm(W, X).abs().min()
     
-            print(f"{update}/{num_updates}: loss={loss.item()}, extremality={extreme}, lr={step_scale}")
+            message = f"{update}/{num_updates}: loss={loss.item()}, extremality={extreme}, lr={step_scale}"
+            if feasible_preproj: message += " [no projection needed]"
+            print(message)
             loss_curve.append(loss.item())
             extr_curve.append(extreme.item())
     
