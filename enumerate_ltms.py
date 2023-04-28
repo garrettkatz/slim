@@ -5,8 +5,8 @@ from scipy.optimize import linprog, OptimizeWarning
 from scipy.linalg import LinAlgWarning
 import warnings
 
-# warnings.filterwarnings("ignore", category=LinAlgWarning)
-# warnings.filterwarnings("ignore", category=OptimizeWarning)
+warnings.filterwarnings("ignore", category=LinAlgWarning)
+warnings.filterwarnings("ignore", category=OptimizeWarning)
 np.set_printoptions(formatter={"int": lambda x: "%+d" % x}, linewidth=1000)
 
 def enumerate_ltms(N):
