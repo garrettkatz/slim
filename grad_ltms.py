@@ -123,14 +123,20 @@ if __name__ == "__main__":
     
         np.set_printoptions(formatter = {'float': lambda x: "%+.3f" % x})
     
-        W = W.detach().numpy()
-        print(np.concatenate((W_lp, W), axis=1)[:10])
-
         with open(f"result_grad_ltm_{N}.pkl", "wb") as f:
-            pk.dump((loss_curve, extr_curve), f)
+            pk.dump((W, loss_curve, extr_curve), f)
 
     with open(f"result_grad_ltm_{N}.pkl", "rb") as f:
-        (loss_curve, extr_curve) = pk.load(f)
+        (W, loss_curve, extr_curve) = pk.load(f)
+
+    W = W.detach().numpy()
+    print(np.concatenate((W_lp, W), axis=1)[:10])
+
+    np.set_printoptions(formatter={'float': lambda x: "%+0.2f" % x})
+    for i in A:
+        for j, k in zip(A[i], K[i]):
+            ab = np.linalg.lstsq(np.vstack((W[i], X[:,k])).T, W[j], rcond=None)[0]
+            print(X[:,k].numpy().astype(int), W[i], W[j], ab, i,j,k)
 
     for do_log in (False, True):
         pt.figure(figsize=(3,3))
