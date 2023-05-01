@@ -114,7 +114,7 @@ if back:
         pt.axis('off')
         # pt.xticks([], [])
         # pt.yticks([], [])
-        pt.title(f"$t = {i}$")
+        pt.title(f"$t = {i+1}$")
 
     pt.tight_layout(pad=0)
     pt.savefig("oneshot.png")
