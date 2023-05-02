@@ -52,7 +52,9 @@ def enumerate_ltms(N, canonical=False):
             if result.x is not None:
                 W[k] = result.x
                 feasible[k] = (np.sign(W[k] @ X[:,:j+1]) == y).all() # sanity check
+                feasible[k] = feasible[k] and (result.status == 0) # only accept nominally successful terminations
                 if canonical: # canonical check .001 for small numerical error
+                    maybe better: canonicalize by sorting absolute, then check feasible and also if same dichotomy already in Y.
                     feasible[k] = feasible[k] and result.x[0] > -.001 and ((result.x[1:] - result.x[:-1]) > -.001).all()
                 # print(result.x.round(1), feasible[k])
                 # print(result.message)
