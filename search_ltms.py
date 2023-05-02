@@ -12,7 +12,7 @@ np.set_printoptions(formatter={"int": lambda x: "%+d" % x}, linewidth=1000)
 N = 5
 
 X = np.array(tuple(it.product((-1, +1), repeat=N-1))).T
-X = np.vstack((np.ones(2**(N-1)), X))
+X = np.vstack((-np.ones(2**(N-1)), X))
 
 frontier = set([(-1,)*(2**(N-1))])
 explored = {}
