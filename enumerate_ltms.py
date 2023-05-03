@@ -1,3 +1,4 @@
+import sys
 import itertools as it
 import numpy as np
 import matplotlib.pyplot as pt
@@ -19,12 +20,12 @@ def enumerate_ltms(N, canonical=False):
 
     # additional constraints for canonical
     if canonical:
-        A_c = np.eye(N, k=-1) - np.eye(N)
+        A_c = np.eye(N, k=-1) - np.eye(N) # w[0] >= 0, w[i] >= w[i-1]
         b_c = np.zeros(N)
 
     Y = np.array([[-1, +1]]).T
     for j in range(1, 2**(N-1)):
-        print(f"{j} of {2**(N-1)}")
+        print(f"{j} of {2**(N-1)}, {2*Y.shape[0]} dichots to check")
 
         Y = np.block([
             [Y, -np.ones((Y.shape[0], 1), dtype=int)],
@@ -32,6 +33,7 @@ def enumerate_ltms(N, canonical=False):
 
         feasible = np.empty(Y.shape[0], dtype=bool)
         W = {}
+        Y_set = set() # for canonical
         for k, y in enumerate(Y):
 
             A_ub = -(X[:,:j+1] * y).T
@@ -48,16 +50,30 @@ def enumerate_ltms(N, canonical=False):
                 A_ub = A_ub,
                 b_ub = b_ub,
                 bounds = (None, None),
+                # method='simplex',
+                method='revised simplex',
             )
             if result.x is not None:
                 W[k] = result.x
-                feasible[k] = (np.sign(W[k] @ X[:,:j+1]) == y).all() # sanity check
-                feasible[k] = feasible[k] and (result.status == 0) # only accept nominally successful terminations
-                if canonical: # canonical check .001 for small numerical error
-                    maybe better: canonicalize by sorting absolute, then check feasible and also if same dichotomy already in Y.
-                    feasible[k] = feasible[k] and result.x[0] > -.001 and ((result.x[1:] - result.x[:-1]) > -.001).all()
-                # print(result.x.round(1), feasible[k])
-                # print(result.message)
+
+                if canonical:
+                    # canonicalize to counteract rounding error in w order and non-negative constraints
+                    W[k] = np.sort(np.fabs(W[k]))
+                    yk = np.sign(W[k] @ X[:,:j+1]).astype(int)
+                    feasible[k] = (yk == y).all()
+
+                    # avoid canonical duplicates
+                    yk = tuple(yk)
+                    if yk in Y_set:
+                        feasible[k] = False # flag duplicate for removal
+                    elif feasible[k]:
+                        Y_set.add(yk)
+
+                else:
+                    # not canonical, just sanity check region constraints
+                    yk = np.sign(W[k] @ X[:,:j+1]).astype(int)
+                    feasible[k] = (yk == y).all()
+
             else:
                 feasible[k] = False
 
@@ -71,11 +87,16 @@ if __name__ == "__main__":
 
     canonical = True
 
-    # for N in range(3,6):
-    # for N in range(3,5):
-    # for N in range(3,4):
-    # for N in range(6, 7):
-    for N in [7]:
+    if len(sys.argv) > 1:
+        Ns = [int(sys.argv[1])]
+    else:
+        # Ns = np.arange(3,6)
+        # Ns = np.arange(3,5)
+        # Ns = np.arange(3,4)
+        # Ns = np.arange(6, 7)
+        Ns = [3]
+
+    for N in Ns:
         print(N)
 
         Y, W, X = enumerate_ltms(N, canonical)
