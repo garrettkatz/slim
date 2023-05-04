@@ -50,8 +50,8 @@ def enumerate_ltms(N, canonical=False):
                 A_ub = A_ub,
                 b_ub = b_ub,
                 bounds = (None, None),
-                # method='simplex',
-                method='revised simplex',
+                method='simplex',
+                # method='revised simplex', # this and high-ds miss some solutions
             )
             if result.x is not None:
                 W[k] = result.x
@@ -85,6 +85,7 @@ def enumerate_ltms(N, canonical=False):
 
 if __name__ == "__main__":
 
+    do_gen = True
     canonical = True
 
     if len(sys.argv) > 1:
@@ -98,8 +99,15 @@ if __name__ == "__main__":
 
     for N in Ns:
         print(N)
+        fname = f"ltms_{N}{'_c' if canonical else ''}.npz"
 
-        Y, W, X = enumerate_ltms(N, canonical)
+        if do_gen:
+            Y, W, X = enumerate_ltms(N, canonical)
+            np.savez(fname, Y=Y, W=W, X=X)
+        else:
+            ltms = np.load(fname)
+            Y, W, X = ltms["Y"], ltms["W"], ltms["X"]
+    
         print(W.round(1))
         # print(np.hstack((W.round(1), Y)))
         print(Y.shape, W.shape, X.shape)
@@ -116,9 +124,6 @@ if __name__ == "__main__":
                 num_sym += num_sym_i * 2**np.count_nonzero(w)
 
             print(f"{num_sym} regions with symmetry")
-
-        fname = f"ltms_{N}{'_c' if canonical else ''}.npz"
-        np.savez(fname, Y=Y, W=W, X=X)
 
         # print(W)
 
