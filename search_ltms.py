@@ -19,7 +19,8 @@ X = np.array(tuple(it.product((-1, +1), repeat=N-1))).T
 X = np.vstack((+np.ones(2**(N-1)), X))
 
 # frontier = set([(-1,)*(2**(N-1))])
-frontier = set([(+1,)*(2**(N-1))])
+fifo = [(+1,)*(2**(N-1))]
+frontier = set(fifo)
 explored = set()
 dichotomies = {}
 
@@ -31,8 +32,8 @@ if canonical:
 num_pops = 0
 while len(frontier) > 0:
     num_pops += 1
-    # y = frontier.pop(0)
-    y = frontier.pop()
+    y = fifo.pop(0)
+    frontier.remove(y)
 
     if y in explored: continue
     explored.add(y)
@@ -77,8 +78,10 @@ while len(frontier) > 0:
         # if y[k] == -1:
             # frontier.add(y[:k] + (+1,) + y[k+1:])
         if y[k] == +1:
-            frontier.add(y[:k] + (-1,) + y[k+1:])
-            # frontier.append(y[:k] + (+1,) + y[k+1:])
+            y_flip = y[:k] + (-1,) + y[k+1:]
+            if y_flip not in frontier:
+                fifo.append(y_flip)
+                frontier.add(y_flip)
 
 print(np.vstack(list(dichotomies.values())))
 print(len(dichotomies))
