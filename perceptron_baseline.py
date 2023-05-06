@@ -121,7 +121,8 @@ if __name__ == "__main__":
 
     for n, N in enumerate(Ns):
         num_epochs = all_num_epochs[n]
-        pt.plot([N]*len(num_epochs), num_epochs, '.', color=(.4,)*3)
+        # pt.plot([N]*len(num_epochs), num_epochs, '.', color=(.4,)*3)
+        pt.plot(N +  + np.random.randn(len(num_epochs))*0.05, num_epochs, '.', color=(.4,)*3)
 
     pt.plot(Ns, avg_iters, 'ko-')
 
