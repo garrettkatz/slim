@@ -51,6 +51,7 @@ def enumerate_ltms(N, canonical=False):
                 b_ub = b_ub,
                 bounds = (None, None),
                 method='simplex',
+                # method='highs-ipm',
                 # method='revised simplex', # this and high-ds miss some solutions
             )
             if result.x is not None:
@@ -86,7 +87,7 @@ def enumerate_ltms(N, canonical=False):
 if __name__ == "__main__":
 
     do_gen = True
-    canonical = True
+    canonical = False
 
     if len(sys.argv) > 1:
         Ns = [int(sys.argv[1])]
