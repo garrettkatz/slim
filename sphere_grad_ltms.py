@@ -21,14 +21,14 @@ mp.rcParams['font.family'] = 'serif'
 if __name__ == "__main__":
     
     N = 4 # dim
-    eps = 0.001 # constraint slack threshold
+    eps = 0.01 # constraint slack threshold
     lr = 0.1 # learning rate
     num_updates = 2000
 
-    N = 5 # dim
-    eps = 0.0001 # constraint slack threshold
-    lr = 0.01 # learning rate
-    num_updates = 2000
+    # N = 5 # dim
+    # eps = 0.0001 # constraint slack threshold
+    # lr = 0.01 # learning rate
+    # num_updates = 2000
 
     ltms = np.load(f"ltms_{N}.npz")
     Y, W, X = ltms["Y"], ltms["W"], ltms["X"]
@@ -41,6 +41,9 @@ if __name__ == "__main__":
     # save original
     W_lp = W.copy()
 
+    # monitor active constraints
+    active_constraints = {}
+
     if True: # do training
     # if False: # just load results
 
@@ -52,11 +55,15 @@ if __name__ == "__main__":
             # differentiate loss function
             loss, grad, _ = calc_derivatives(Y, W, X, A, K, sym)
             delta = -grad
-    
+
+            # don't change weight norms
+            for i in range(len(W)):
+                delta[i] -= (delta[i] @ W[i]) * W[i] / (W[i]**2).sum()
+
             # update and zero gradient for next iter
-            step_scale = lr # N=4
+            # step_scale = lr # N=4
             # step_scale = lr / (np.log(update+1) + 1) # N=5
-            # step_scale = lr / (update+1)**.5
+            step_scale = lr / (update+1)**.5
 
             W += delta * step_scale
     
@@ -82,7 +89,7 @@ if __name__ == "__main__":
             # check distance to feasible boundary
             extreme = np.fabs(W @ X).min()
     
-            message = f"{update}/{num_updates}: loss={loss}, extremality={extreme}, lr={step_scale}"
+            message = f"{update}/{num_updates}: loss={loss}, |delta|={(delta**2).sum()}, extremality={extreme}, lr={step_scale}"
             if feasible_preproj: message += " [no projection needed]"
             print(message)
             loss_curve.append(loss.item())
@@ -144,3 +151,5 @@ if __name__ == "__main__":
     #     pt.tight_layout()
     #     pt.savefig(f"result_grad_ltm_{N}.pdf")
     #     pt.show()
+
+

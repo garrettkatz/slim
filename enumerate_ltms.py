@@ -86,8 +86,8 @@ def enumerate_ltms(N, canonical=False):
 
 if __name__ == "__main__":
 
-    do_gen = True
-    canonical = False
+    do_gen = False
+    canonical = True
 
     if len(sys.argv) > 1:
         Ns = [int(sys.argv[1])]
