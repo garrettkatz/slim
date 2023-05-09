@@ -11,6 +11,7 @@ def canon_adjacency(X, Yc):
 
     Yn, Wn = {}, {}
     for i, yc in enumerate(Yc):
+        print(f"adjacencies to region {i} of {len(Yc)}")
         Yn[i], Wn[i] = [], []
         for k in range(Yc.shape[1]):
             yn = yc.copy()
@@ -43,8 +44,8 @@ def canon_adjacency(X, Yc):
 
 if __name__ == "__main__":
 
-    N = 5
-    do_adj = False
+    N = 7
+    do_adj = True
 
     ltms = np.load(f"ltms_{N}_c.npz")
     Y, W, X = ltms["Y"], ltms["W"], ltms["X"]

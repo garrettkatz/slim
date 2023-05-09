@@ -61,6 +61,7 @@ for t,k in enumerate(K):
         # arrow = pyvista.Arrow(start=(0, 0, 0), direction=x.flat, tip_length=0.1, tip_radius=0.05, tip_resolution=3, shaft_radius=0.01, shaft_resolution=50, scale='auto')
 
         p.add_mesh(circle, color=(.8,)*3, opacity=1, show_edges=False)
+        # p.add_mesh(circle, color=(.0,)*3, opacity=.9, show_edges=False)
         p.add_mesh(outline, color=(0,)*3, opacity=1, show_edges=True, line_width=line_width)
 
         # # only seems to show when screenshot scale is 1
@@ -81,7 +82,7 @@ for t,k in enumerate(K):
         # p.add_mesh(pyvista.Line(-null.flatten(), null.flatten()), color=(0,)*3, line_width=line_width)
         p.add_mesh(pyvista.Cylinder(direction=null.flatten(), radius=.01, height=2*crad), color=(0,)*3)
 
-    p.camera.elevation += 15
+    p.camera.elevation += 0#15
     p.camera.azimuth -= 15
     p.camera.position = tuple(pos*.925 for pos in p.camera.position)
 
