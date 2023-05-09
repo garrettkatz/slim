@@ -21,29 +21,29 @@ mp.rcParams['font.family'] = 'serif'
 
 if __name__ == "__main__":
     
-    # N = 4 # dim
-    # eps = 0.1 # constraint slack threshold
-    # lr = .1 # learning rate
-    # decay = .995 # lr decay
-    # num_updates = 500
+    N = 4 # dim
+    eps = 0.1 # constraint slack threshold
+    lr = .1 # learning rate
+    decay = .995 # lr decay
+    num_updates = 1000
 
-    # N = 5 # dim
-    # eps = 0.01 # constraint slack threshold
-    # lr = 0.05 # learning rate
-    # decay = .99 # lr decay
-    # num_updates = 500
+    N = 5 # dim
+    eps = 0.1 # constraint slack threshold
+    lr = 0.05 # learning rate
+    decay = .99 # lr decay
+    num_updates = 1000
 
-    # N = 6 # dim
-    # eps = 0.01 # constraint slack threshold
-    # lr = 0.01 # learning rate
-    # decay = .995 # lr decay
-    # num_updates = 1000
+    N = 6 # dim
+    eps = 0.1 # constraint slack threshold
+    lr = 0.01 # learning rate
+    decay = .995 # lr decay
+    num_updates = 1000
 
     N = 7 # dim
     eps = 0.01 # constraint slack threshold
-    lr = 0.02 # learning rate
-    decay = .9995 # lr decay
-    num_updates = 10000
+    lr = 0.005 # learning rate
+    decay = .999 # lr decay
+    num_updates = 3000
 
     # load canonical regions and adjacencies
     ltms = np.load(f"ltms_{N}_c.npz")
@@ -144,7 +144,7 @@ if __name__ == "__main__":
                     b_eq = b_eq,
 
                     bounds = (None, None),
-                    # method='simplex',
+                    method='simplex',
                     # method='highs-ipm',
                     # method='revised simplex', # this and high-ds miss some solutions
                 )
