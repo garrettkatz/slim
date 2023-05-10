@@ -44,7 +44,7 @@ def canon_adjacency(X, Yc):
 
 if __name__ == "__main__":
 
-    N = 7
+    N = 4
     do_adj = True
 
     ltms = np.load(f"ltms_{N}_c.npz")

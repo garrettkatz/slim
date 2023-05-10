@@ -21,31 +21,35 @@ mp.rcParams['font.family'] = 'serif'
 
 if __name__ == "__main__":
 
-    do_opt = False
+    do_opt = True
+
+    postfix = '' # exp
+    # postfix = '_jaggi'
+    # postfix = '_sqrt'
     
     N = 4 # dim
     eps = 0.1 # constraint slack threshold
     lr = .1 # learning rate
     decay = .99 # lr decay
-    num_updates = 1000
+    num_updates = 2500
 
     N = 5 # dim
     eps = 0.1 # constraint slack threshold
     lr = 0.05 # learning rate
     decay = .99 # lr decay
-    num_updates = 1000
+    num_updates = 2500
 
-    # N = 6 # dim
-    # eps = 0.1 # constraint slack threshold
-    # lr = 0.01 # learning rate
-    # decay = .995 # lr decay
-    # num_updates = 1000
+    N = 6 # dim
+    eps = 0.1 # constraint slack threshold
+    lr = 0.02 # learning rate
+    decay = .995 # lr decay
+    num_updates = 2500
 
-    N = 7 # dim
-    eps = 0.01 # constraint slack threshold
-    lr = 0.005 # learning rate
-    decay = .999 # lr decay
-    num_updates = 10000
+    # N = 7 # dim
+    # eps = 0.01 # constraint slack threshold
+    # lr = 0.005 # learning rate
+    # decay = .999 # lr decay
+    # num_updates = 10000
 
     # load canonical regions and adjacencies
     ltms = np.load(f"ltms_{N}_c.npz")
@@ -93,14 +97,7 @@ if __name__ == "__main__":
         pgn_curve = [] # projected gradient
         for update in range(num_updates):
 
-            # update step scale for next iter
-            # step_scale = lr # N=4
-            # step_scale = lr / (np.log(update+1) + 1) # N=5
-            # step_scale = lr / (update + 1)**.5
-            # step_scale = lr * 2 / (update + 2) # frank-wolfe default, maybe only for convex opt?
-            step_scale = lr * decay**update
-
-            # loss on joint-canonical adjacencies
+            # loss and gradient on joint-canonical adjacencies
             loss = 0
             grad = np.zeros(Wc.shape)
             for (i,j,k) in Ac:
@@ -122,7 +119,7 @@ if __name__ == "__main__":
             gn_curve.append(norm(grad.flatten()))
 
             # Frank-Wolfe projections
-            pgnorm = 0
+            delta = np.zeros(Wc.shape)
             for r in range(len(grad)):
 
                 # norm constraints
@@ -150,15 +147,36 @@ if __name__ == "__main__":
                     # method='revised simplex', # this and high-ds miss some solutions
                 )
 
-                # take step
-                delta = result.x
-                step = delta - Wc[r]
-                Wc[r] = Wc[r] + step_scale * step # stays in interior as long as delta feasible and 0 <= step_scale <= 1
+                # save feasible descent direction
+                delta[r] = result.x
 
-                # calculate norm of projected gradient
-                step /= norm(step)
-                pgnorm += (grad[r] * step).sum()**2
+                # step = delta - Wc[r]
+                # Wc[r] = Wc[r] + step_scale * step # stays in interior as long as delta feasible and 0 <= step_scale <= 1
 
+                # # calculate norm of projected gradient
+                # step /= norm(step)
+                # pgnorm += (grad[r] * step).sum()**2
+
+            # calculate step scaling
+            # step_scale = lr # N=4
+            # step_scale = lr / (np.log(update+1) + 1) # N=5
+            # step_scale = lr / (update + 1)**.5
+
+            if postfix == '':
+                step_scale = lr * decay**update
+
+            elif postfix == '_jaggi':
+                step_scale = 2 / (update + 2) # frank-wolfe default, maybe only for convex opt?
+
+            elif postfix == '_sqrt':
+                step_scale = .5 / (update + 1)**.5
+
+            # take step
+            step = delta - Wc
+            Wc = Wc + step_scale * step # stays in interior as long as delta feasible and 0 <= step_scale <= 1
+
+            # calculate norm of projected gradient
+            pgnorm = np.fabs((grad * step).sum()) / norm(step)
             pgn_curve.append(pgnorm)
 
             # stop if infeasible (numerical issues when boundaries can be zero)
@@ -178,10 +196,10 @@ if __name__ == "__main__":
     
             np.set_printoptions(formatter = {'float': lambda x: "%+.3f" % x})
     
-        with open(f"ccg_ltm_{N}.pkl", "wb") as f:
+        with open(f"ccg_ltm_{N}{postfix}.pkl", "wb") as f:
             pk.dump((Wc, loss_curve, extr_curve, gn_curve, pgn_curve), f)
 
-    with open(f"ccg_ltm_{N}.pkl", "rb") as f:
+    with open(f"ccg_ltm_{N}{postfix}.pkl", "rb") as f:
         (Wc, loss_curve, extr_curve, gn_curve, pgn_curve) = pk.load(f)
 
     np.set_printoptions(formatter={'float': lambda x: "%+0.2f" % x})
