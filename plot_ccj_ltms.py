@@ -28,8 +28,8 @@ for m,N in zip(markers, Ns):
 
     pt.sca(axs[1])
     # pt.plot(steps, gn_curve[::step], 'k:')
-    pt.plot(steps, pgn_curve[::step], f'k{m}--', mfc='w', label=f"$N={N}$")
-    pt.ylabel("Gradient Norm")
+    pt.plot(steps, np.array(pgn_curve[::step])**0.5, f'k{m}--', mfc='w', label=f"$N={N}$")
+    pt.ylabel("Projected Gradient Norm")
     pt.yscale('log')
 
     pt.sca(axs[2])

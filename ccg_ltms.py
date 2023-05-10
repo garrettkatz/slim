@@ -20,11 +20,13 @@ np.set_printoptions(threshold=10e6)
 mp.rcParams['font.family'] = 'serif'
 
 if __name__ == "__main__":
+
+    do_opt = False
     
     N = 4 # dim
     eps = 0.1 # constraint slack threshold
     lr = .1 # learning rate
-    decay = .995 # lr decay
+    decay = .99 # lr decay
     num_updates = 1000
 
     N = 5 # dim
@@ -33,17 +35,17 @@ if __name__ == "__main__":
     decay = .99 # lr decay
     num_updates = 1000
 
-    N = 6 # dim
-    eps = 0.1 # constraint slack threshold
-    lr = 0.01 # learning rate
-    decay = .995 # lr decay
-    num_updates = 1000
+    # N = 6 # dim
+    # eps = 0.1 # constraint slack threshold
+    # lr = 0.01 # learning rate
+    # decay = .995 # lr decay
+    # num_updates = 1000
 
     N = 7 # dim
     eps = 0.01 # constraint slack threshold
     lr = 0.005 # learning rate
     decay = .999 # lr decay
-    num_updates = 3000
+    num_updates = 10000
 
     # load canonical regions and adjacencies
     ltms = np.load(f"ltms_{N}_c.npz")
@@ -82,8 +84,7 @@ if __name__ == "__main__":
             Ac.add((i,j,k))
     Ac = tuple(Ac)
 
-    if True: # do training
-    # if False: # just load results
+    if do_opt:
 
         # gradient update loop
         loss_curve = []
@@ -193,11 +194,11 @@ if __name__ == "__main__":
     
         print("\n   ** adj\n")
     
-        print("wi, xk, wj, ab, resid, ijk")
+        print("ab, wi, xk, wj, resid, ijk")
         for (i, j, k) in Ac:
             ab = np.linalg.lstsq(np.vstack((Wc[i], X[:,k])).T, Wc[j], rcond=None)[0]
             resid = np.fabs(ab[0]*Wc[i] + ab[1]*X[:,k] - Wc[j]).max()
-            print(Wc[i], X[:,k], Wc[j], ab, resid, i,j,k)
+            print(ab, Wc[i], X[:,k], Wc[j], resid, i,j,k)
 
     # somehow check if solution on joint canonical extends to full adjacency set (complicated)
     # if N < 5:
