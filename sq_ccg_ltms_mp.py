@@ -69,7 +69,7 @@ def main():
     eps = 0.1 # constraint slack threshold
     lr = 0.02 # learning rate
     decay = .995 # lr decay
-    num_updates = 20000
+    num_updates = 1000
 
     N = 7 # dim
     eps = 0.1 # constraint slack threshold
@@ -242,6 +242,9 @@ def main():
                 delta = pool.map(descent_direction, args)
                 delta = np.vstack(delta)
 
+            # convert delta to a step
+            delta = delta - Wc
+
             # calculate step scaling
             if postfix == '':
                 step_scale = lr * decay**update
@@ -255,7 +258,7 @@ def main():
             elif postfix == '_ana':
 
                 cubic = [0, 0, 0, 0]
-                step_grad = np.zeros(grad.shape)
+                step_grad = np.zeros(grad.shape) # gradient at end of step (gamma step_scale = 1)
                 for (i,j,k) in Ac:
 
                     # get projections
@@ -312,11 +315,10 @@ def main():
 
             # take step
             scale_curve.append(step_scale)
-            step = delta - Wc
-            Wc = Wc + step_scale * step # stays in interior as long as delta feasible and 0 <= step_scale <= 1
+            Wc = Wc + step_scale * delta # stays in interior as long as delta feasible and 0 <= step_scale <= 1
 
             # calculate norm of projected gradient
-            pgnorm = np.fabs((sq_grad * step).sum()) / norm(step)
+            pgnorm = np.fabs((sq_grad * delta).sum()) / norm(delta)
             pgn_curve.append(pgnorm)
 
             # stop if infeasible (numerical issues when boundaries can be zero)
@@ -365,36 +367,36 @@ def main():
             resid = np.fabs(ab[0]*Wc[i] + ab[1]*X[:,k] - Wc[j]).max()
             print(ab, Wc[i], X[:,k], Wc[j], resid, i,j,k)
 
-    # fig, axs = pt.subplots(4,2, figsize=(6,8))
-    # for do_log in (False, True):
-    #     pt.sca(axs[0,int(do_log)])
-    #     # pt.plot(loss_curve, 'k-')
-    #     pt.plot(np.array(sq_loss_curve) / len(Ac), 'k-', label="squared")
-    #     pt.plot(np.array(loss_curve) / len(Ac), 'k:', label="orig")
-    #     pt.ylabel("Span Loss")
-    #     if do_log: pt.yscale('log')
-    #     pt.legend()
+    fig, axs = pt.subplots(4,2, figsize=(6,8))
+    for do_log in (False, True):
+        pt.sca(axs[0,int(do_log)])
+        # pt.plot(loss_curve, 'k-')
+        pt.plot(np.array(sq_loss_curve) / len(Ac), 'k-', label="squared")
+        pt.plot(np.array(loss_curve) / len(Ac), 'k:', label="orig")
+        pt.ylabel("Span Loss")
+        if do_log: pt.yscale('log')
+        pt.legend()
 
-    #     pt.sca(axs[1,int(do_log)])
-    #     pt.plot(cos_curve, 'k-')
-    #     pt.ylabel("max 1 - cos")
-    #     if do_log: pt.yscale('log')
+        pt.sca(axs[1,int(do_log)])
+        pt.plot(cos_curve, 'k-')
+        pt.ylabel("max 1 - cos")
+        if do_log: pt.yscale('log')
 
-    #     pt.sca(axs[2,int(do_log)])
-    #     pt.plot(extr_curve, 'k-')
-    #     pt.plot([0, len(extr_curve)], [eps, eps], 'k:')
-    #     pt.ylabel("Constraint Slack")
-    #     if do_log: pt.yscale('log')
+        pt.sca(axs[2,int(do_log)])
+        pt.plot(extr_curve, 'k-')
+        pt.plot([0, len(extr_curve)], [eps, eps], 'k:')
+        pt.ylabel("Constraint Slack")
+        if do_log: pt.yscale('log')
 
-    #     pt.sca(axs[3,int(do_log)])
-    #     pt.plot(gn_curve, 'k:')
-    #     pt.plot(pgn_curve, 'k-')
-    #     pt.ylabel("Grad Norm")
-    #     if do_log: pt.yscale('log')
-    #     pt.xlabel("Optimization Step")
-    # pt.tight_layout()
-    # pt.savefig(f"sq_ccg_ltm_mp_{N}.pdf")
-    # pt.show()
+        pt.sca(axs[3,int(do_log)])
+        pt.plot(gn_curve, 'k:')
+        pt.plot(pgn_curve, 'k-')
+        pt.ylabel("Grad Norm")
+        if do_log: pt.yscale('log')
+        pt.xlabel("Optimization Step")
+    pt.tight_layout()
+    pt.savefig(f"sq_ccg_ltm_mp_{N}.pdf")
+    pt.show()
 
 
 if __name__ == "__main__": main()
