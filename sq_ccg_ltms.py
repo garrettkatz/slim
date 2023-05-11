@@ -25,6 +25,7 @@ mp.rcParams['font.family'] = 'serif'
 def main():
 
     do_opt = True
+    # do_opt = False
 
     # postfix = '' # exp
     # postfix = '_jaggi'
@@ -47,7 +48,7 @@ def main():
     eps = 0.1 # constraint slack threshold
     lr = 0.02 # learning rate
     decay = .995 # lr decay
-    num_updates = 1000
+    num_updates = 2000
 
     N = 7 # dim
     eps = 0.1 # constraint slack threshold
@@ -107,13 +108,16 @@ def main():
 
         # gradient update loop
         loss_curve = []
+        sq_loss_curve = []
         extr_curve = []
         gn_curve = []
         pgn_curve = [] # projected gradient
+        cos_curve = []
         for update in range(num_updates):
 
             # loss and gradient on joint-canonical adjacencies
-            loss = 0
+            loss, sq_loss = 0., 0.
+            max_1mc = 0
             grad = np.zeros(Wc.shape)
             sq_grad = np.zeros(Wc.shape)
             for (i,j,k) in Ac:
@@ -126,6 +130,9 @@ def main():
                 wiPkwj = wiPk @ wjPk
                 wjPkwj = wjPk @ wjPk
                 wiPk_n, wjPk_n = norm(wiPk), norm(wjPk)
+
+                # check minimum cosine
+                max_1mc = max(max_1mc, 1. - wiPkwj / (wiPk_n * wjPk_n))
     
                 # accumulate span loss
                 loss += wiPk_n*wjPk_n - wiPk @ wjPk
@@ -134,18 +141,21 @@ def main():
                 grad[i] += 2 * (wiPk * wjPk_n / wiPk_n - wjPk)
 
                 # accumulate span loss
-                # loss += (wiPk @ wiPk)*(wjPk @ wjPk) - wiPkwj**2 # sq version
+                sq_loss += (wiPk @ wiPk)*(wjPk @ wjPk) - wiPkwj**2 # sq version
     
                 # accumulate gradient
                 sq_grad[i] += 4 * (wiPk * wjPkwj - wiPkwj * wjPk) # sq version
 
-            gn_curve.append(norm(grad.flatten()))
+            gn_curve.append(norm(sq_grad.flatten()))
+            cos_curve.append(max_1mc)
+            loss_curve.append(loss)
+            sq_loss_curve.append(sq_loss)
 
             # Frank-Wolfe projections
 
             # # batch solve for delta
             # result = linprog(
-            #     c = grad.flatten(),
+            #     c = sq_grad.flatten(),
             #     A_ub = A_ub,
             #     b_ub = b_ub,
             #     A_eq = A_eq,
@@ -171,7 +181,7 @@ def main():
 
                 # solve for delta
                 result = linprog(
-                    c = grad[r],
+                    c = sq_grad[r],
 
                     # faster with only boundary region constraints
                     A_ub = -(X[:,Kn[r]] * Yc[r, Kn[r]]).T,
@@ -241,6 +251,7 @@ def main():
                 step_scale = gammas[vals.argmin()]
                 if step_scale == 0.:
                     print(roots)
+                    print(roots[:,np.newaxis]**np.arange(4) @ cubic.coef)
                     print(gammas)
                     print(vals)
 
@@ -249,7 +260,7 @@ def main():
             Wc = Wc + step_scale * step # stays in interior as long as delta feasible and 0 <= step_scale <= 1
 
             # calculate norm of projected gradient
-            pgnorm = np.fabs((grad * step).sum()) / norm(step)
+            pgnorm = np.fabs((sq_grad * step).sum()) / norm(step)
             pgn_curve.append(pgnorm)
 
             # stop if infeasible (numerical issues when boundaries can be zero)
@@ -261,10 +272,9 @@ def main():
     
             # check distance to feasible boundary
             extreme = np.fabs(Wc @ X).min()
-    
-            message = f"{update}/{num_updates}: loss={loss} ({loss / len(Ac)}), |grad|={norm(grad.flatten())}, |pgrad|={pgnorm**0.5}, extremality={extreme}, lr={step_scale}"
+
+            message = f"{update}/{num_updates}: loss={loss}, 1-cos<={max_1mc}), ,|sqgrad|={norm(sq_grad.flatten())}, |psqgrad|={pgnorm**0.5}, extremality={extreme}, lr={step_scale}"
             print(message)
-            loss_curve.append(loss)
             extr_curve.append(extreme)
 
             # if extreme < eps:
@@ -278,10 +288,10 @@ def main():
             np.set_printoptions(formatter = {'float': lambda x: "%+.3f" % x})
     
         with open(f"sq_ccg_ltm_{N}{postfix}.pkl", "wb") as f:
-            pk.dump((Wc, loss_curve, extr_curve, gn_curve, pgn_curve), f)
+            pk.dump((Wc, sq_loss_curve, loss_curve, extr_curve, gn_curve, pgn_curve, cos_curve), f)
 
     with open(f"sq_ccg_ltm_{N}{postfix}.pkl", "rb") as f:
-        (Wc, loss_curve, extr_curve, gn_curve, pgn_curve) = pk.load(f)
+        (Wc, sq_loss_curve, loss_curve, extr_curve, gn_curve, pgn_curve, cos_curve) = pk.load(f)
 
     np.set_printoptions(formatter={'float': lambda x: "%+0.2f" % x})
 
@@ -299,19 +309,28 @@ def main():
             resid = np.fabs(ab[0]*Wc[i] + ab[1]*X[:,k] - Wc[j]).max()
             print(ab, Wc[i], X[:,k], Wc[j], resid, i,j,k)
 
-    fig, axs = pt.subplots(3,2, figsize=(6,8))
+    fig, axs = pt.subplots(4,2, figsize=(6,8))
     for do_log in (False, True):
         pt.sca(axs[0,int(do_log)])
         # pt.plot(loss_curve, 'k-')
-        pt.plot(np.array(loss_curve) / len(Ac), 'k-')
+        pt.plot(np.array(sq_loss_curve) / len(Ac), 'k-', label="squared")
+        pt.plot(np.array(loss_curve) / len(Ac), 'k:', label="orig")
         pt.ylabel("Span Loss")
         if do_log: pt.yscale('log')
+        pt.legend()
+
         pt.sca(axs[1,int(do_log)])
+        pt.plot(cos_curve, 'k-')
+        pt.ylabel("max 1 - cos")
+        if do_log: pt.yscale('log')
+
+        pt.sca(axs[2,int(do_log)])
         pt.plot(extr_curve, 'k-')
         pt.plot([0, len(extr_curve)], [eps, eps], 'k:')
         pt.ylabel("Constraint Slack")
         if do_log: pt.yscale('log')
-        pt.sca(axs[2,int(do_log)])
+
+        pt.sca(axs[3,int(do_log)])
         pt.plot(gn_curve, 'k:')
         pt.plot(pgn_curve, 'k-')
         pt.ylabel("Grad Norm")
