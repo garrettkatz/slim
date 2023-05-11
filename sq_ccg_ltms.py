@@ -49,11 +49,11 @@ def main():
     decay = .995 # lr decay
     num_updates = 1000
 
-    N = 7 # dim
-    eps = 0.1 # constraint slack threshold
-    lr = 0.005 # learning rate
-    decay = .999 # lr decay
-    num_updates = 5000
+    # N = 7 # dim
+    # eps = 0.1 # constraint slack threshold
+    # lr = 0.005 # learning rate
+    # decay = .999 # lr decay
+    # num_updates = 5000
 
     # load canonical regions and adjacencies
     ltms = np.load(f"ltms_{N}_c.npz")
@@ -234,10 +234,15 @@ def main():
                 # find min value of any real roots in [0, 1]
                 cubic = Polynomial(cubic)
                 quartic = cubic.integ()
-                gammas = np.append(cubic.roots().real, 1.)
+                roots = cubic.roots()
+                gammas = np.append(roots.real, (0., 1.))
                 gammas = gammas[(0 <= gammas) & (gammas <= 1)]
                 vals = gammas[:,np.newaxis]**np.arange(5) @ quartic.coef
                 step_scale = gammas[vals.argmin()]
+                if step_scale == 0.:
+                    print(roots)
+                    print(gammas)
+                    print(vals)
 
             # take step
             step = delta - Wc
@@ -262,8 +267,12 @@ def main():
             loss_curve.append(loss)
             extr_curve.append(extreme)
 
-            if extreme < eps:
-                print("hit boundary")
+            # if extreme < eps:
+            #     print("hit boundary")
+            #     break
+
+            if step_scale == 0:
+                print("hit gamma=0 (L=0?)")
                 break
     
             np.set_printoptions(formatter = {'float': lambda x: "%+.3f" % x})
