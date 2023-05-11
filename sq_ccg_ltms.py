@@ -4,6 +4,8 @@ from adjacent_ltms import adjacency
 import matplotlib.pyplot as pt
 import matplotlib as mp
 from numpy.linalg import norm
+from numpy.polynomial import Polynomial
+import scipy.sparse as sp
 
 from scipy.optimize import linprog, OptimizeWarning
 from scipy.linalg import LinAlgWarning
@@ -19,37 +21,39 @@ np.set_printoptions(threshold=10e6)
 
 mp.rcParams['font.family'] = 'serif'
 
-if __name__ == "__main__":
+# @profile
+def main():
 
     do_opt = True
 
-    postfix = '' # exp
+    # postfix = '' # exp
     # postfix = '_jaggi'
     # postfix = '_sqrt'
+    postfix='_ana'
     
     N = 4 # dim
     eps = 0.1 # constraint slack threshold
     lr = .1 # learning rate
     decay = .99 # lr decay
-    num_updates = 2500
+    num_updates = 100
 
     N = 5 # dim
     eps = 0.1 # constraint slack threshold
     lr = 0.05 # learning rate
     decay = .99 # lr decay
-    num_updates = 2500
+    num_updates = 500
 
     N = 6 # dim
     eps = 0.1 # constraint slack threshold
     lr = 0.02 # learning rate
     decay = .995 # lr decay
-    num_updates = 2500
+    num_updates = 1000
 
     N = 7 # dim
-    eps = 0.01 # constraint slack threshold
+    eps = 0.1 # constraint slack threshold
     lr = 0.005 # learning rate
     decay = .999 # lr decay
-    num_updates = 10#000
+    num_updates = 5000
 
     # load canonical regions and adjacencies
     ltms = np.load(f"ltms_{N}_c.npz")
@@ -62,8 +66,12 @@ if __name__ == "__main__":
     for i in Yn:
         Kn[i] = (Yc[i] != Yn[i]).argmax(axis=1)
 
+    # set up projection matrices
+    PX = np.eye(N) - X.T.reshape(-1, N, 1) * X.T.reshape(-1, 1, N) / N
+
     # save original
     W_lp = Wc.copy()
+    B_eq = (W_lp * W_lp).sum(axis=1) # 'norm' constraint
 
     # set up equality constraints for region<->weight invariance
     A_sym = []
@@ -90,6 +98,13 @@ if __name__ == "__main__":
 
     if do_opt:
 
+        # # make linprog coefs once for batch mode
+        # A_eq = sp.block_diag([W_lp[r:r+1] for r in range(W_lp.shape[0])])
+        # b_eq = B_eq
+        # # faster with only boundary region constraints
+        # A_ub = sp.block_diag([-(X[:,Kn[r]] * Yc[r, Kn[r]]).T for r in range(W_lp.shape[0])])
+        # b_ub = np.full(A_ub.shape[0], -eps)
+
         # gradient update loop
         loss_curve = []
         extr_curve = []
@@ -100,31 +115,55 @@ if __name__ == "__main__":
             # loss and gradient on joint-canonical adjacencies
             loss = 0
             grad = np.zeros(Wc.shape)
+            sq_grad = np.zeros(Wc.shape)
             for (i,j,k) in Ac:
 
                 # get projected weights
                 wi, wj, xk = Wc[i], Wc[j], X[:,k]
-                Pk = np.eye(N) - xk.reshape((N, 1)) * xk / N
+                Pk = PX[k]
                 wiPk = wi @ Pk
                 wjPk = wj @ Pk
+                wiPkwj = wiPk @ wjPk
+                wjPkwj = wjPk @ wjPk
                 wiPk_n, wjPk_n = norm(wiPk), norm(wjPk)
     
                 # accumulate span loss
                 loss += wiPk_n*wjPk_n - wiPk @ wjPk
     
                 # accumulate gradient
-                grad[i] += wiPk * wjPk_n / wiPk_n - wjPk
-                grad[j] += wjPk * wiPk_n  / wjPk_n - wiPk
+                grad[i] += 2 * (wiPk * wjPk_n / wiPk_n - wjPk)
+
+                # accumulate span loss
+                # loss += (wiPk @ wiPk)*(wjPk @ wjPk) - wiPkwj**2 # sq version
+    
+                # accumulate gradient
+                sq_grad[i] += 4 * (wiPk * wjPkwj - wiPkwj * wjPk) # sq version
 
             gn_curve.append(norm(grad.flatten()))
 
             # Frank-Wolfe projections
+
+            # # batch solve for delta
+            # result = linprog(
+            #     c = grad.flatten(),
+            #     A_ub = A_ub,
+            #     b_ub = b_ub,
+            #     A_eq = A_eq,
+            #     b_eq = b_eq,
+            #     bounds = (None, None),
+            #     # method='simplex',
+            #     # method='highs-ipm',
+            #     # method='revised simplex', # this and high-ds miss some solutions, but needed for sparse
+            # )
+            # delta = result.x.reshape(W_lp.shape)
+
+            # sequential
             delta = np.zeros(Wc.shape)
             for r in range(len(grad)):
 
                 # norm constraints
                 A_eq = W_lp[r:r+1]
-                b_eq = np.array([Wc[r] @ W_lp[r]])
+                b_eq = B_eq[r:r+1]
 
                 # # region<->weight invariance constraints
                 # A_eq = np.concatenate((A_eq, A_sym[r]), axis=0)
@@ -150,18 +189,7 @@ if __name__ == "__main__":
                 # save feasible descent direction
                 delta[r] = result.x
 
-                # step = delta - Wc[r]
-                # Wc[r] = Wc[r] + step_scale * step # stays in interior as long as delta feasible and 0 <= step_scale <= 1
-
-                # # calculate norm of projected gradient
-                # step /= norm(step)
-                # pgnorm += (grad[r] * step).sum()**2
-
             # calculate step scaling
-            # step_scale = lr # N=4
-            # step_scale = lr / (np.log(update+1) + 1) # N=5
-            # step_scale = lr / (update + 1)**.5
-
             if postfix == '':
                 step_scale = lr * decay**update
 
@@ -170,6 +198,46 @@ if __name__ == "__main__":
 
             elif postfix == '_sqrt':
                 step_scale = .5 / (update + 1)**.5
+
+            elif postfix == '_ana':
+
+                cubic = [0, 0, 0, 0]
+                step_grad = np.zeros(grad.shape)
+                for (i,j,k) in Ac:
+
+                    # get projections
+                    di, dj, wi, wj, xk = delta[i], delta[j], Wc[i], Wc[j], X[:,k]
+                    Pk = PX[k]
+                    wiPk = wi @ Pk
+                    wjPk = wj @ Pk
+                    diPk = di @ Pk
+                    djPk = dj @ Pk
+
+                    # accumulate span grad at step scale == 1
+                    vi, vj = wiPk + diPk, wjPk + djPk
+                    step_grad[i] += 4 * (vi * (vj @ vj) - (vi @ vj) * vj) # have to use sq version
+
+                    # accumulate cubic coefficients
+                    cubic[0] += (wjPk @ wjPk)*(wiPk @ diPk) - (wiPk @ wjPk)*(wjPk @ diPk)
+                    cubic[1] += 2*(wjPk @ djPk)*(wiPk @ diPk) + (wjPk @ wjPk)*(diPk @ diPk) \
+                                - (wiPk @ wjPk)*(djPk @ diPk) - (wjPk @ diPk)*(diPk @ wjPk + wiPk @ djPk)
+                    cubic[2] += 2*(wjPk @ djPk)*(diPk @ diPk) + (wiPk @ diPk)*(djPk @ djPk) \
+                                - (wjPk @ diPk)*(diPk @ djPk) - (djPk @ diPk)*(diPk @ wjPk + wiPk @ djPk)
+                    cubic[3] += (djPk @ djPk)*(diPk @ diPk) - (diPk @ djPk)*(djPk @ diPk)
+
+                cubic = [4*cub for cub in cubic]
+
+                # sanity check
+                assert np.allclose(cubic[0], (sq_grad * delta).sum())
+                assert np.allclose(sum(cubic), (step_grad * delta).sum())
+
+                # find min value of any real roots in [0, 1]
+                cubic = Polynomial(cubic)
+                quartic = cubic.integ()
+                gammas = np.append(cubic.roots().real, 1.)
+                gammas = gammas[(0 <= gammas) & (gammas <= 1)]
+                vals = gammas[:,np.newaxis]**np.arange(5) @ quartic.coef
+                step_scale = gammas[vals.argmin()]
 
             # take step
             step = delta - Wc
@@ -189,17 +257,21 @@ if __name__ == "__main__":
             # check distance to feasible boundary
             extreme = np.fabs(Wc @ X).min()
     
-            message = f"{update}/{num_updates}: loss={loss}, |grad|={norm(grad.flatten())}, |pgrad|={pgnorm**0.5}, extremality={extreme}, lr={step_scale}"
+            message = f"{update}/{num_updates}: loss={loss} ({loss / len(Ac)}), |grad|={norm(grad.flatten())}, |pgrad|={pgnorm**0.5}, extremality={extreme}, lr={step_scale}"
             print(message)
-            loss_curve.append(loss.item())
-            extr_curve.append(extreme.item())
+            loss_curve.append(loss)
+            extr_curve.append(extreme)
+
+            if extreme < eps:
+                print("hit boundary")
+                break
     
             np.set_printoptions(formatter = {'float': lambda x: "%+.3f" % x})
     
-        with open(f"ccg_ltm_{N}{postfix}.pkl", "wb") as f:
+        with open(f"sq_ccg_ltm_{N}{postfix}.pkl", "wb") as f:
             pk.dump((Wc, loss_curve, extr_curve, gn_curve, pgn_curve), f)
 
-    with open(f"ccg_ltm_{N}{postfix}.pkl", "rb") as f:
+    with open(f"sq_ccg_ltm_{N}{postfix}.pkl", "rb") as f:
         (Wc, loss_curve, extr_curve, gn_curve, pgn_curve) = pk.load(f)
 
     np.set_printoptions(formatter={'float': lambda x: "%+0.2f" % x})
@@ -218,26 +290,16 @@ if __name__ == "__main__":
             resid = np.fabs(ab[0]*Wc[i] + ab[1]*X[:,k] - Wc[j]).max()
             print(ab, Wc[i], X[:,k], Wc[j], resid, i,j,k)
 
-    # somehow check if solution on joint canonical extends to full adjacency set (complicated)
-    # if N < 5:
-    #     ltms = np.load(f"ltms_{N}.npz")
-    #     Y, W, X = ltms["Y"], ltms["W"], ltms["X"]
-    #     A, K = adjacency(Y, sym=False)
-    #     for i in range(len(A)):
-    
-    #         # find canonical equivalent for i
-    #         sorter = np.argsort(np.fabs(W[i]))    
-    #         for j, k in zip(A[i], K[i]):
-
     fig, axs = pt.subplots(3,2, figsize=(6,8))
     for do_log in (False, True):
         pt.sca(axs[0,int(do_log)])
-        pt.plot(loss_curve, 'k-')
+        # pt.plot(loss_curve, 'k-')
+        pt.plot(np.array(loss_curve) / len(Ac), 'k-')
         pt.ylabel("Span Loss")
         if do_log: pt.yscale('log')
         pt.sca(axs[1,int(do_log)])
         pt.plot(extr_curve, 'k-')
-        pt.plot([0, num_updates], [eps, eps], 'k:')
+        pt.plot([0, len(extr_curve)], [eps, eps], 'k:')
         pt.ylabel("Constraint Slack")
         if do_log: pt.yscale('log')
         pt.sca(axs[2,int(do_log)])
@@ -247,9 +309,10 @@ if __name__ == "__main__":
         if do_log: pt.yscale('log')
         pt.xlabel("Optimization Step")
     pt.tight_layout()
-    pt.savefig(f"ccg_ltm_{N}.pdf")
+    pt.savefig(f"sq_ccg_ltm_{N}.pdf")
     pt.show()
 
 
+if __name__ == "__main__": main()
 
 
