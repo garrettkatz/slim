@@ -6,6 +6,7 @@ import matplotlib as mp
 from numpy.linalg import norm
 from numpy.polynomial import Polynomial
 import scipy.sparse as sp
+from multiprocessing import Pool, cpu_count
 
 from scipy.optimize import linprog, OptimizeWarning
 from scipy.linalg import LinAlgWarning
@@ -21,8 +22,28 @@ np.set_printoptions(threshold=10e6)
 
 mp.rcParams['font.family'] = 'serif'
 
+def descent_direction(args):
+    sq_grad_r, A_ub, b_ub, A_eq, b_eq = args
+
+    result = linprog(
+        c = sq_grad_r,
+        A_ub = A_ub,
+        b_ub = b_ub,
+        A_eq = A_eq,
+        b_eq = b_eq,
+        bounds = (None, None),
+        method='simplex',
+        # method='highs-ipm',
+        # method='revised simplex', # this and high-ds miss some solutions
+    )
+
+    delta_r = result.x
+    return delta_r
+
 # @profile
 def main():
+
+    num_procs = cpu_count()-1
 
     do_opt = True
     # do_opt = False
@@ -54,7 +75,7 @@ def main():
     eps = 0.1 # constraint slack threshold
     lr = 0.005 # learning rate
     decay = .999 # lr decay
-    num_updates = 5000
+    num_updates = 20000
 
     # load canonical regions and adjacencies
     ltms = np.load(f"ltms_{N}_c.npz")
@@ -105,6 +126,18 @@ def main():
         # # faster with only boundary region constraints
         # A_ub = sp.block_diag([-(X[:,Kn[r]] * Yc[r, Kn[r]]).T for r in range(W_lp.shape[0])])
         # b_ub = np.full(A_ub.shape[0], -eps)
+
+        # make multiprog coef args once for mp mode
+        coef_args = []
+        for r in range(len(W_lp)):
+            # norm constraints
+            A_eq = W_lp[r:r+1].copy()
+            b_eq = B_eq[r:r+1].copy()
+            # faster with only boundary region constraints
+            A_ub = -(X[:,Kn[r]] * Yc[r, Kn[r]]).T
+            b_ub = -np.ones(len(Kn[r]))*eps
+            # save
+            coef_args.append((A_ub, b_ub, A_eq, b_eq))
 
         # gradient update loop
         loss_curve = []
@@ -167,37 +200,46 @@ def main():
             # )
             # delta = result.x.reshape(W_lp.shape)
 
-            # sequential
-            delta = np.zeros(Wc.shape)
-            for r in range(len(grad)):
+            # # sequential solve for delta
+            # delta = np.zeros(Wc.shape)
+            # for r in range(len(grad)):
 
-                # norm constraints
-                A_eq = W_lp[r:r+1]
-                b_eq = B_eq[r:r+1]
+            #     # norm constraints
+            #     A_eq = W_lp[r:r+1]
+            #     b_eq = B_eq[r:r+1]
 
-                # # region<->weight invariance constraints
-                # A_eq = np.concatenate((A_eq, A_sym[r]), axis=0)
-                # b_eq = np.concatenate((b_eq, np.zeros(A_sym[r].shape[0])))
+            #     A_ub = -(X[:,Kn[r]] * Yc[r, Kn[r]]).T
+            #     b_ub = -np.ones(len(Kn[r]))*eps
 
-                # solve for delta
-                result = linprog(
-                    c = sq_grad[r],
+            #     # # region<->weight invariance constraints
+            #     # A_eq = np.concatenate((A_eq, A_sym[r]), axis=0)
+            #     # b_eq = np.concatenate((b_eq, np.zeros(A_sym[r].shape[0])))
 
-                    # faster with only boundary region constraints
-                    A_ub = -(X[:,Kn[r]] * Yc[r, Kn[r]]).T,
-                    b_ub = -np.ones(len(Kn[r]))*eps,
+            #     # solve for delta
+            #     result = linprog(
+            #         c = sq_grad[r],
 
-                    A_eq = A_eq,
-                    b_eq = b_eq,
+            #         # faster with only boundary region constraints
+            #         A_ub = -(X[:,Kn[r]] * Yc[r, Kn[r]]).T,
+            #         b_ub = -np.ones(len(Kn[r]))*eps,
 
-                    bounds = (None, None),
-                    method='simplex',
-                    # method='highs-ipm',
-                    # method='revised simplex', # this and high-ds miss some solutions
-                )
+            #         A_eq = A_eq,
+            #         b_eq = b_eq,
 
-                # save feasible descent direction
-                delta[r] = result.x
+            #         bounds = (None, None),
+            #         method='simplex',
+            #         # method='highs-ipm',
+            #         # method='revised simplex', # this and high-ds miss some solutions
+            #     )
+
+            #     # save feasible descent direction
+            #     delta[r] = result.x
+
+            # multiproc solve for delta
+            args = [(sq_grad[r].copy(),) + coefs for r,coefs in enumerate(coef_args)]
+            with Pool(num_procs) as pool:
+                delta = pool.map(descent_direction, args)
+                delta = np.vstack(delta)
 
             # calculate step scaling
             if postfix == '':
@@ -287,10 +329,10 @@ def main():
     
             np.set_printoptions(formatter = {'float': lambda x: "%+.3f" % x})
     
-        with open(f"sq_ccg_ltm_{N}{postfix}.pkl", "wb") as f:
+        with open(f"sq_ccg_ltm_mp_{N}{postfix}.pkl", "wb") as f:
             pk.dump((Wc, sq_loss_curve, loss_curve, extr_curve, gn_curve, pgn_curve, cos_curve), f)
 
-    with open(f"sq_ccg_ltm_{N}{postfix}.pkl", "rb") as f:
+    with open(f"sq_ccg_ltm_mp_{N}{postfix}.pkl", "rb") as f:
         (Wc, sq_loss_curve, loss_curve, extr_curve, gn_curve, pgn_curve, cos_curve) = pk.load(f)
 
     np.set_printoptions(formatter={'float': lambda x: "%+0.2f" % x})
@@ -309,36 +351,36 @@ def main():
             resid = np.fabs(ab[0]*Wc[i] + ab[1]*X[:,k] - Wc[j]).max()
             print(ab, Wc[i], X[:,k], Wc[j], resid, i,j,k)
 
-    fig, axs = pt.subplots(4,2, figsize=(6,8))
-    for do_log in (False, True):
-        pt.sca(axs[0,int(do_log)])
-        # pt.plot(loss_curve, 'k-')
-        pt.plot(np.array(sq_loss_curve) / len(Ac), 'k-', label="squared")
-        pt.plot(np.array(loss_curve) / len(Ac), 'k:', label="orig")
-        pt.ylabel("Span Loss")
-        if do_log: pt.yscale('log')
-        pt.legend()
+    # fig, axs = pt.subplots(4,2, figsize=(6,8))
+    # for do_log in (False, True):
+    #     pt.sca(axs[0,int(do_log)])
+    #     # pt.plot(loss_curve, 'k-')
+    #     pt.plot(np.array(sq_loss_curve) / len(Ac), 'k-', label="squared")
+    #     pt.plot(np.array(loss_curve) / len(Ac), 'k:', label="orig")
+    #     pt.ylabel("Span Loss")
+    #     if do_log: pt.yscale('log')
+    #     pt.legend()
 
-        pt.sca(axs[1,int(do_log)])
-        pt.plot(cos_curve, 'k-')
-        pt.ylabel("max 1 - cos")
-        if do_log: pt.yscale('log')
+    #     pt.sca(axs[1,int(do_log)])
+    #     pt.plot(cos_curve, 'k-')
+    #     pt.ylabel("max 1 - cos")
+    #     if do_log: pt.yscale('log')
 
-        pt.sca(axs[2,int(do_log)])
-        pt.plot(extr_curve, 'k-')
-        pt.plot([0, len(extr_curve)], [eps, eps], 'k:')
-        pt.ylabel("Constraint Slack")
-        if do_log: pt.yscale('log')
+    #     pt.sca(axs[2,int(do_log)])
+    #     pt.plot(extr_curve, 'k-')
+    #     pt.plot([0, len(extr_curve)], [eps, eps], 'k:')
+    #     pt.ylabel("Constraint Slack")
+    #     if do_log: pt.yscale('log')
 
-        pt.sca(axs[3,int(do_log)])
-        pt.plot(gn_curve, 'k:')
-        pt.plot(pgn_curve, 'k-')
-        pt.ylabel("Grad Norm")
-        if do_log: pt.yscale('log')
-        pt.xlabel("Optimization Step")
-    pt.tight_layout()
-    pt.savefig(f"sq_ccg_ltm_{N}.pdf")
-    pt.show()
+    #     pt.sca(axs[3,int(do_log)])
+    #     pt.plot(gn_curve, 'k:')
+    #     pt.plot(pgn_curve, 'k-')
+    #     pt.ylabel("Grad Norm")
+    #     if do_log: pt.yscale('log')
+    #     pt.xlabel("Optimization Step")
+    # pt.tight_layout()
+    # pt.savefig(f"sq_ccg_ltm_mp_{N}.pdf")
+    # pt.show()
 
 
 if __name__ == "__main__": main()
