@@ -25,7 +25,7 @@ mp.rcParams['font.family'] = 'serif'
 def main():
 
     do_opt = True
-    # do_opt = False
+    do_opt = False
 
     # postfix = '' # exp
     # postfix = '_jaggi'
@@ -50,11 +50,11 @@ def main():
     decay = .995 # lr decay
     num_updates = 10000
 
-    N = 7 # dim
-    eps = 0.1 # constraint slack threshold
-    lr = 0.005 # learning rate
-    decay = .999 # lr decay
-    num_updates = 5000
+    # N = 7 # dim
+    # eps = 0.1 # constraint slack threshold
+    # lr = 0.005 # learning rate
+    # decay = .999 # lr decay
+    # num_updates = 5000
 
     # load canonical regions and adjacencies
     ltms = np.load(f"ltms_{N}_c.npz")
@@ -113,6 +113,7 @@ def main():
         gn_curve = []
         pgn_curve = [] # projected gradient
         cos_curve = []
+        scale_curve = []
         for update in range(num_updates):
 
             # loss and gradient on joint-canonical adjacencies
@@ -256,6 +257,7 @@ def main():
                     print(vals)
 
             # take step
+            scale_curve.append(step_scale)
             step = delta - Wc
             Wc = Wc + step_scale * step # stays in interior as long as delta feasible and 0 <= step_scale <= 1
 
@@ -288,9 +290,10 @@ def main():
             np.set_printoptions(formatter = {'float': lambda x: "%+.3f" % x})
     
         with open(f"sq_ccg_ltm_{N}{postfix}.pkl", "wb") as f:
-            pk.dump((Wc, sq_loss_curve, loss_curve, extr_curve, gn_curve, pgn_curve, cos_curve), f)
+            pk.dump((Wc, sq_loss_curve, loss_curve, extr_curve, gn_curve, pgn_curve, cos_curve, scale_curve), f)
 
     with open(f"sq_ccg_ltm_{N}{postfix}.pkl", "rb") as f:
+        # (Wc, sq_loss_curve, loss_curve, extr_curve, gn_curve, pgn_curve, cos_curve, scale_curve) = pk.load(f)
         (Wc, sq_loss_curve, loss_curve, extr_curve, gn_curve, pgn_curve, cos_curve) = pk.load(f)
 
     np.set_printoptions(formatter={'float': lambda x: "%+0.2f" % x})

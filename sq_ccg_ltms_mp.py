@@ -69,7 +69,7 @@ def main():
     eps = 0.1 # constraint slack threshold
     lr = 0.02 # learning rate
     decay = .995 # lr decay
-    num_updates = 10000
+    num_updates = 20000
 
     N = 7 # dim
     eps = 0.1 # constraint slack threshold
@@ -146,6 +146,7 @@ def main():
         gn_curve = []
         pgn_curve = [] # projected gradient
         cos_curve = []
+        scale_curve = []
         for update in range(num_updates):
 
             # loss and gradient on joint-canonical adjacencies
@@ -269,13 +270,23 @@ def main():
                     vi, vj = wiPk + diPk, wjPk + djPk
                     step_grad[i] += 4 * (vi * (vj @ vj) - (vi @ vj) * vj) # have to use sq version
 
+                    # # accumulate cubic coefficients
+                    # cubic[0] += (wjPk @ wjPk)*(wiPk @ diPk) - (wiPk @ wjPk)*(wjPk @ diPk)
+                    # cubic[1] += 2*(wjPk @ djPk)*(wiPk @ diPk) + (wjPk @ wjPk)*(diPk @ diPk) \
+                    #             - (wiPk @ wjPk)*(djPk @ diPk) - (wjPk @ diPk)*(diPk @ wjPk + wiPk @ djPk)
+                    # cubic[2] += 2*(wjPk @ djPk)*(diPk @ diPk) + (wiPk @ diPk)*(djPk @ djPk) \
+                    #             - (wjPk @ diPk)*(diPk @ djPk) - (djPk @ diPk)*(diPk @ wjPk + wiPk @ djPk)
+                    # cubic[3] += (djPk @ djPk)*(diPk @ diPk) - (diPk @ djPk)*(djPk @ diPk)
+
                     # accumulate cubic coefficients
-                    cubic[0] += (wjPk @ wjPk)*(wiPk @ diPk) - (wiPk @ wjPk)*(wjPk @ diPk)
+                    # cubic[0] += ((wjPk @ wjPk) * wiPk - (wiPk @ wjPk) * wjPk) @ diPk
+                    cubic[0] += wjPk @ (wjPk[:,np.newaxis] * wiPk - wiPk[:,np.newaxis] * wjPk) @ diPk
                     cubic[1] += 2*(wjPk @ djPk)*(wiPk @ diPk) + (wjPk @ wjPk)*(diPk @ diPk) \
                                 - (wiPk @ wjPk)*(djPk @ diPk) - (wjPk @ diPk)*(diPk @ wjPk + wiPk @ djPk)
                     cubic[2] += 2*(wjPk @ djPk)*(diPk @ diPk) + (wiPk @ diPk)*(djPk @ djPk) \
                                 - (wjPk @ diPk)*(diPk @ djPk) - (djPk @ diPk)*(diPk @ wjPk + wiPk @ djPk)
-                    cubic[3] += (djPk @ djPk)*(diPk @ diPk) - (diPk @ djPk)*(djPk @ diPk)
+                    # cubic[3] += ((djPk @ djPk) * diPk - (diPk @ djPk) * djPk) @ diPk
+                    cubic[3] += djPk @ (djPk[:,np.newaxis] * diPk - diPk[:,np.newaxis] * djPk) @ diPk
 
                 cubic = [4*cub for cub in cubic]
 
@@ -293,11 +304,14 @@ def main():
                 step_scale = gammas[vals.argmin()]
                 if step_scale == 0.:
                     print(roots)
+                    print(cubic.coef)
                     print(roots[:,np.newaxis]**np.arange(4) @ cubic.coef)
                     print(gammas)
+                    print(quartic.coef)
                     print(vals)
 
             # take step
+            scale_curve.append(step_scale)
             step = delta - Wc
             Wc = Wc + step_scale * step # stays in interior as long as delta feasible and 0 <= step_scale <= 1
 
@@ -330,10 +344,10 @@ def main():
             np.set_printoptions(formatter = {'float': lambda x: "%+.3f" % x})
     
         with open(f"sq_ccg_ltm_mp_{N}{postfix}.pkl", "wb") as f:
-            pk.dump((Wc, sq_loss_curve, loss_curve, extr_curve, gn_curve, pgn_curve, cos_curve), f)
+            pk.dump((Wc, sq_loss_curve, loss_curve, extr_curve, gn_curve, pgn_curve, cos_curve, scale_curve), f)
 
     with open(f"sq_ccg_ltm_mp_{N}{postfix}.pkl", "rb") as f:
-        (Wc, sq_loss_curve, loss_curve, extr_curve, gn_curve, pgn_curve, cos_curve) = pk.load(f)
+        (Wc, sq_loss_curve, loss_curve, extr_curve, gn_curve, pgn_curve, cos_curve, scale_curve) = pk.load(f)
 
     np.set_printoptions(formatter={'float': lambda x: "%+0.2f" % x})
 
