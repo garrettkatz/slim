@@ -49,11 +49,11 @@ def main():
     decay = .995 # lr decay
     num_updates = 1000
 
-    # N = 7 # dim
-    # eps = 0.1 # constraint slack threshold
-    # lr = 0.005 # learning rate
-    # decay = .999 # lr decay
-    # num_updates = 5000
+    N = 7 # dim
+    eps = 0.1 # constraint slack threshold
+    lr = 0.005 # learning rate
+    decay = .999 # lr decay
+    num_updates = 5000
 
     # load canonical regions and adjacencies
     ltms = np.load(f"ltms_{N}_c.npz")
