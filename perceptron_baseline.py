@@ -127,12 +127,16 @@ if __name__ == "__main__":
     pt.plot(Ns, avg_iters, 'ko-')
 
     # pt.ylabel("Num Iters")
-    pt.ylabel("Num Epochs")
-    pt.xlabel("$N$")
+    pt.ylabel("Epochs to convergence")
+    pt.xlabel("Input dimension $N$")
     pt.xticks(Ns, Ns)
-    pt.yscale('log', base=2)
+    pt.yscale('log')
+    # pt.yscale('log', base=2)
     # pt.yscale('log', base=np.pi/2)
     # pt.yticks((np.pi/2)**Ns, [f"$\pi^{N}$" for N in Ns])
+    pt.yticks(10.**np.arange(3), ["$10^{%d}$" % k for k in range(3)])
+    # pt.gca().yaxis.get_major_locator().set_params(numticks=3)#, subs=[.2, .4, .6, .8])
+    pt.gca().yaxis.get_minor_locator().set_params(numticks=10)#, subs=[.2, .4, .6, .8])
 
     # pt.subplot(1,2,2)
     # for n, N in enumerate(Ns):

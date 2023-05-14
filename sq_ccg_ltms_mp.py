@@ -59,23 +59,23 @@ def main():
     decay = .99 # lr decay
     num_updates = 100
 
-    N = 5 # dim
-    eps = 0.1 # constraint slack threshold
-    lr = 0.05 # learning rate
-    decay = .99 # lr decay
-    num_updates = 500
+    # N = 5 # dim
+    # eps = 0.1 # constraint slack threshold
+    # lr = 0.05 # learning rate
+    # decay = .99 # lr decay
+    # num_updates = 500
 
-    N = 6 # dim
-    eps = 0.1 # constraint slack threshold
-    lr = 0.02 # learning rate
-    decay = .995 # lr decay
-    num_updates = 50000
+    # N = 6 # dim
+    # eps = 0.1 # constraint slack threshold
+    # lr = 0.02 # learning rate
+    # decay = .995 # lr decay
+    # num_updates = 50000
 
-    N = 7 # dim
-    eps = 0.1 # constraint slack threshold
-    lr = 0.005 # learning rate
-    decay = .999 # lr decay
-    num_updates = 1_000_000
+    # N = 7 # dim
+    # eps = 0.1 # constraint slack threshold
+    # lr = 0.005 # learning rate
+    # decay = .999 # lr decay
+    # num_updates = 1_000_000
 
     # load canonical regions and adjacencies
     ltms = np.load(f"ltms_{N}_c.npz")
