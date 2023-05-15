@@ -111,7 +111,7 @@ if __name__ == "__main__":
     matplotlib.rcParams['font.family'] = 'serif'
     matplotlib.rcParams['text.usetex'] = True
 
-    pt.figure(figsize=(3,2))
+    pt.figure(figsize=(2.25,1.8))
 
     # pt.subplot(1,2,1)
     avg_iters = np.array([np.average(num_epochs, weights=sym) for sym, num_epochs in zip(syms, all_num_epochs)])
@@ -131,9 +131,6 @@ if __name__ == "__main__":
     pt.xlabel("Input dimension $N$")
     pt.xticks(Ns, Ns)
     pt.yscale('log')
-    # pt.yscale('log', base=2)
-    # pt.yscale('log', base=np.pi/2)
-    # pt.yticks((np.pi/2)**Ns, [f"$\pi^{N}$" for N in Ns])
     pt.yticks(10.**np.arange(3), ["$10^{%d}$" % k for k in range(3)])
     # pt.gca().yaxis.get_major_locator().set_params(numticks=3)#, subs=[.2, .4, .6, .8])
     pt.gca().yaxis.get_minor_locator().set_params(numticks=10)#, subs=[.2, .4, .6, .8])

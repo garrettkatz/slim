@@ -33,7 +33,7 @@ if __name__ == "__main__":
                 resid = np.fabs(wi - wjx @ ab).max()
                 residuals[N].append(resid)
 
-    pt.figure(figsize=(2.5,2))
+    pt.figure(figsize=(2.5,1.5))
     # vioplots
     parts = pt.violinplot([residuals[N] for N in Ns], Ns, widths=.8)
     for pc in parts['bodies']:

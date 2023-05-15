@@ -11,7 +11,7 @@ Ns = [4,5,6,7]
 markers = '^sod'
 postfix = "_ana"
 
-pt.figure(figsize=(3.25,3.25))
+pt.figure(figsize=(3,2.85))
 
 for n,(N, marker) in enumerate(zip(Ns, markers)):
 
@@ -60,8 +60,8 @@ for n,(N, marker) in enumerate(zip(Ns, markers)):
     # pt.subplot(1, len(Ns), n+1)
     pt.subplot(2,1,1)
     pt.plot(alpha, beta, marker, mfc='none', mec='k', label=f"$N={N}$", alpha=0.2)
-    pt.xlabel("$\\alpha$")
-    pt.ylabel("$\\beta$", rotation=0)
+    pt.xlabel("$\\alpha$", fontsize=12)
+    pt.ylabel("$\\beta$", rotation=0, fontsize=12)
     # pt.legend()
 
     alphas = np.empty(len(Ac))
@@ -79,14 +79,14 @@ for n,(N, marker) in enumerate(zip(Ns, markers)):
 
     # pt.subplot(1,3,2)
     # pt.plot(np.fabs(wjx_dots), alphas, marker, mfc='none', mec='k', label=f"$N = {N}$")
-    # pt.xlabel("jsum")
+    # pt.xlabel("jsum", fontsize=12)
     # pt.ylabel("alpha", rotation=0)
     # pt.legend()
 
     pt.subplot(2,1,2)
     pt.plot(2*wjx_dots, betas, marker, mfc='none', mec='k', label=f"$N={N}$", alpha=0.2)
-    pt.xlabel("$-2w_i^{\\top} x_k/N$")
-    pt.ylabel("$\\beta$", rotation=0)
+    pt.xlabel("$-2w_i^{\\top} x_k/N$", fontsize=12)
+    pt.ylabel("$\\beta$", rotation=0, fontsize=12)
     pt.legend(ncol=2, columnspacing=0.1, borderpad=0.2)
     
     # alphas = np.empty((len(Wc), len(Wc)))

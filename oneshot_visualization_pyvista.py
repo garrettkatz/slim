@@ -133,7 +133,7 @@ if back:
         # pt.yticks([], [])
         # pt.title(f"$t = {i+1}$")
         if i < len(imgs)//2:
-            pt.title(f"$t = {i+1}$")
+            pt.title(f"$t = {i+1}$", fontsize=18)
         if i == 0:
             pt.xlabel("Presented")
         if i == len(imgs)//2:
