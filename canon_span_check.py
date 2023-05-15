@@ -25,16 +25,6 @@ if __name__ == "__main__":
     # print(ww)
     # assert (0 <= wc).all() and (wc[:-1] < wc[1:]).all()
 
-    # way that should work:
-    # canonicalize (or track canonicalization) of current hemi
-    # choose a random neighbor for transition
-    # apply symmetry that leaves current canonicalized hemi invariant (but may change representative weight) and transforms random neighbor to its canonicalization
-    # "look up" neighbor weights (or apply alpha beta) and undo all canonicalizations back to current hemi's neighbor
-    # this is not a span rule anymore, but compu complex could still be linear (signed sym matrix is only O(N) storage)
-
-    # way that you want to work:
-    # the foregoing but apply alpha-beta without applying region-invariant symmetry
-
     N = 4
     T = 1000 # number of transitions
 
