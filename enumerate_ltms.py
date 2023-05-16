@@ -86,17 +86,13 @@ def enumerate_ltms(N, canonical=False):
 
 if __name__ == "__main__":
 
-    do_gen = False
+    do_gen = True
     canonical = True
 
     if len(sys.argv) > 1:
         Ns = [int(sys.argv[1])]
     else:
-        # Ns = np.arange(3,6)
-        # Ns = np.arange(3,5)
-        # Ns = np.arange(3,4)
-        # Ns = np.arange(6, 7)
-        Ns = [3]
+        Ns = list(range(3,9))
 
     for N in Ns:
         print(N)

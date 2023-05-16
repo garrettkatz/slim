@@ -5,7 +5,8 @@ from scipy.special import factorial
 
 if __name__ == "__main__":
 
-    do_exp = False
+    do_exp = True
+    # do_exp = False
 
     Ns = np.arange(3, 9)
 
