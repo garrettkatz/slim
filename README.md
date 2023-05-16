@@ -20,3 +20,6 @@ Then you can generate the paper figures with these steps:
 
 1. Run `python plot_sq_ccg_ltms.py` to generate the optimization metrics plot
 
+1. Run `python analyze_alpha_beta.py` to generate the alpha-beta scatter plot and beta-reflection plot
+
+
