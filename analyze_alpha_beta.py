@@ -85,7 +85,7 @@ for n,(N, marker) in enumerate(zip(Ns, markers)):
 
     pt.subplot(2,1,2)
     pt.plot(2*wjx_dots, betas, marker, mfc='none', mec='k', label=f"$N={N}$", alpha=0.2)
-    pt.xlabel("$-2w_i^{\\top} x_k/N$", fontsize=12)
+    pt.xlabel("$-2w_j^{\\top} x_k/N$", fontsize=12)
     pt.ylabel("$\\beta$", rotation=0, fontsize=12)
     pt.legend(ncol=2, columnspacing=0.1, borderpad=0.2)
     
