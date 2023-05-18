@@ -1,3 +1,4 @@
+import os
 import pickle as pk
 import numpy as np
 import matplotlib.pyplot as pt
@@ -14,7 +15,12 @@ if __name__ == "__main__":
     residuals = {N: [] for N in Ns}
 
     # process each N
-    for N in Ns:
+    for N in list(Ns):
+
+        # maybe larger N isn't done yet, skip those
+        if not os.path.exists(f"adjs_{N}_c.npz"):
+            Ns.remove(N)
+            continue
 
         # load canonical regions and their adjacencies
         ltms = np.load(f"ltms_{N}_c.npz")
