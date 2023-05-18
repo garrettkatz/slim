@@ -5,81 +5,71 @@ from scipy.special import factorial
 
 if __name__ == "__main__":
 
-    do_exp = True
-    # do_exp = False
+    do_exp = True # whether to run the perceptron training or just load the results
 
     Ns = np.arange(3, 9)
 
     if do_exp:
 
+        # track number of iterations and mistakes
         all_num_iters = []
         all_mistakes = []
-    
+
+        # process one N at a time    
         for N in Ns:
             print(f"N = {N}")
     
+            # load all canonical hemichotomies
             ltms = np.load(f"ltms_{N}_c.npz")
             Y, W, X = ltms["Y"], ltms["W"], ltms["X"]
-        
+
+            # default learning rate of 1
+            # for vanilla perceptron, constant learning rate should not change convergence time, only final weight norm
+            #     https://datascience.stackexchange.com/questions/16843/perceptron-learning-rate
             eta = 1
-        
+
+            # track iterations and mistakes on each hemichotomy        
             num_iters = np.empty(Y.shape[0], dtype=int)
-            num_presentations = np.zeros(Y.shape, dtype=int)
             num_mistake_presentations = np.zeros(Y.shape, dtype=int)
-        
-            for i in range(Y.shape[0]):
-        
-                w = np.zeros(N)
-        
+
+            # separate training runs on one hemichotomy at a time
+            for i, y in enumerate(Y):
+
+                # initial zero weight vector
+                w = np.zeros(N)        
+
+                # keep updating to convergence
                 for k in it.count():
             
-                    if (np.sign(w @ X) == Y[i]).all(): break
-            
-                    # print(f"{k}: {(np.sign(w @ X) == Y[i]).sum()} of {X.shape[1]} correct")
-            
-                    # j = np.random.randint(X.shape[1]) # random sampling with replacement
-        
-                    # j = np.argmax(np.sign(w @ X) != Y[i]) # incorrect sample oracle
-        
-                    # j = k % X.shape[1] # cyclic over samples
-        
-                    # cyclic over shuffled samples
+                    # stop as soon as every example is fit correctly
+                    if (np.sign(w @ X) == y).all(): break
+                    
+                    # randomize order of training examples when every epoch begins
                     if k % X.shape[1] == 0:
                         samples = np.random.permutation(np.arange(X.shape[1]))
+
+                    # get the next training example in randomized order
                     j = samples[k % X.shape[1]]
+
+                    # no weight update if current example fit correctly
+                    if np.sign(w @ X[:,j]) == y[j]: continue
             
-                    num_presentations[i, j] += 1
-            
-                    if np.sign(w @ X[:,j]) == Y[i,j]: continue
-            
+                    # track number of times mistakes were made on each sample
                     num_mistake_presentations[i, j] += 1
-            
-                    w = w + eta * Y[i,j] * X[:,j]
-        
+
+                    # apply weight update by perceptron learning rule
+                    w = w + eta * y[j] * X[:,j]
+
+                # track total number of iterations until convergence
                 num_iters[i] = k
-                print(f"ltm {i} of {Y.shape[0]}: {k} vs {X.shape[1]} iterations, {num_mistake_presentations[i].sum()} mistakes")
-            
-                # print(f"ltm {i}: {k} iterations total.  num presentations (sums to {num_presentations.sum()}):")
-                # print(num_presentations)
-                # print(f"num mistake presentations (sums to {num_mistake_presentations.sum()}):")
-                # print(num_mistake_presentations)
-        
+                print(f"hemi {i} of {len(Y)}: {k} vs {X.shape[1]} iterations, {num_mistake_presentations[i].sum()} mistakes")
+
+            # print maximum iterations over all hemichotomies, store results before next N
             print(f"max iters = {num_iters.max()}")
             all_num_iters.append(num_iters)
             all_mistakes.append(num_mistake_presentations.sum(axis=1))
         
-            # import matplotlib.pyplot as pt
-            # pt.subplot(1,2,1)
-            # pt.hist(num_iters, bins = np.arange(num_iters.max()+1), ec='k', fc=(.5,)*3)
-            # pt.ylabel("Frequency")
-            # pt.xlabel("Iterations to convergence")
-            # pt.subplot(1,2,2)
-            # pt.hist(num_mistake_presentations.sum(axis=1), bins = np.arange(num_mistake_presentations.sum(axis=1).max()+1), ec='k', fc=(.5,)*3)
-            # pt.xlabel("Number of mistakes")
-            # pt.suptitle(f"Perceptron Learning of LTMs (N = {N})")
-            # pt.tight_layout()
-            # pt.show()
-
+        # save all results
         with open("perbase.pkl", "wb") as f:
             pk.dump((all_num_iters, all_mistakes), f)
 

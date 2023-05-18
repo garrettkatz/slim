@@ -65,6 +65,26 @@ def check_feasibility(args):
     # return results
     return feasible, w
 
+
+# assumes integer weights w invariant to same symmetries as their regions
+# may break for N >= 8 [Muroga 1970]
+def get_equivalence_class_size(w):
+
+    # get multiset of weight values and their counts
+    multiset = {}
+    for n in range(N):
+        multiset[w[n]] = multiset.get(w[n], 0) + 1
+
+    # count distinct permutations by multiset coefficient
+    num_perms = factorial(sum(multiset.values()))
+    for v in multiset.values():
+        num_perms /= factorial(v)
+
+    # any non-zero weight can also have its sign flipped
+    size = num_perms * 2**np.count_nonzero(w)
+
+    return size
+
 def enumerate_ltms(N, canonical=True):
 
     # generate half-cube vertices
@@ -144,7 +164,7 @@ def enumerate_ltms(N, canonical=True):
 
 if __name__ == "__main__":
 
-    do_gen = True # whether to re-generate the hemichotomies or only load them
+    do_gen = False # whether to re-generate the hemichotomies or only load them
     canonical = True # whether to enumerate canonical hemichotomies only
 
     # enumerate up to dimension N_max
@@ -166,27 +186,13 @@ if __name__ == "__main__":
         # display number of linearly separable hemichotomies
         message = f"N={N}: {len(Y)} hemis"
     
-        # if canonical, count all non-canonical regions in each symmetry equivalence class
-        # assumes integer weights invariant to same symmetries as their regions
-        # may break for N >= 8 [Muroga 1970]
+        # count all regions (including non-canonial)
         if canonical:
+
+            # accumulate equivalence class size of each weight vector
             region_count = 0
-
-            # count equivalence class of each weight vector
             for i, w in enumerate(W.round()):
-
-                # get multiset of weight values and their counts
-                multiset = {}
-                for n in range(N):
-                    multiset[w[n]] = multiset.get(w[n], 0) + 1
-
-                # count distinct permutations by multiset coefficient
-                num_perms = factorial(sum(multiset.values()))
-                for v in multiset.values():
-                    num_perms /= factorial(v)
-
-                # any non-zero weight can also have its sign flipped
-                region_count += num_perms * 2**np.count_nonzero(w)
+                region_count += get_equivalence_class_size(w)
 
             message += f" ({region_count} regions including non-canonical)"
 

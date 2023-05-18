@@ -8,7 +8,7 @@ You can regenerate the results with these steps:
 
 1. Extract their adjacencies with `python canon_adjacent_ltms.py <N>`, again replacing "<N>" as desired.  On an 8-core machine, up to N=7 takes about 2 minutes.
 
-1. Run `python sq_ccg_ltms_mp.py <N>` to do the conditional gradient span loss optimization for a particular value of N.  On an 8-core machine, N=4 takes a few seconds, and N=7 takes about 5 days.  This will save the optimization metrics and also print the data in the paper tables when it is finished.
+1. Run `python sq_ccg_ltms_mp.py <N>` to do the conditional gradient span loss optimization for a particular value of N.  On an 8-core machine, N=4 takes about 2 seconds, and N=7 takes about 5 days.  This will save the optimization metrics and also print the data in the paper tables when it is finished.
 
 Then you can generate the paper figures with these steps:
 
