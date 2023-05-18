@@ -73,53 +73,65 @@ def enumerate_ltms(N, canonical=True):
 
     # initialize weights and leading portion of hemichotomies
     if canonical:
+        # canonical weights can not produce +1 on all X[:,0] == -1
         Y = np.array([[-1]]).T
     else:
         Y = np.array([[-1, +1]]).T
-    W = np.empty((len(Y), N))
 
     # initialize irredundant constraint tracking
     if canonical:
         irredundant = np.ones(Y.shape, dtype=bool)
 
+        # also need to maintain feasibility and weights in this mode
+        feasible = np.ones(len(Y), dtype=bool)
+        W = np.empty((len(Y), N))
+
     # iteratively extend hemichotomy tail
     for k in range(1, 2**(N-1)):
-        print(f"{k} of {2**(N-1)}, {2*Y.shape[0]} dichots to check")
+        print(f"{k} of {2**(N-1)}, {2*Y.shape[0]} leading hemis to check")
 
-        # identify new redundancies
+        # track new redundancies
         if canonical:
+            # uses positivity of the weights
             must_be_negative = ((X[:,k:k+1] <= X[:,:k]).all(axis=0) & (Y < 0)).any(axis=1)
             must_be_positive = ((X[:,k:k+1] >= X[:,:k]).all(axis=0) & (Y > 0)).any(axis=1)
+            irredundant = np.block([
+                [irredundant, ~must_be_negative.reshape(-1, 1)],
+                [irredundant, ~must_be_positive.reshape(-1, 1)]])
+
+            # duplicate W to match Y below
+            W = np.tile(W, (2,1))
 
         # append next possible bits to leading hemichotomy
         Y = np.block([
             [Y, -np.ones((Y.shape[0], 1), dtype=int)],
             [Y, +np.ones((Y.shape[0], 1), dtype=int)]])
-        W = np.concatenate((W, W), axis=0)
-
-        # track irredundant constraints
-        if canonical:
-            irredundant = np.block([
-                [irredundant, ~must_be_negative.reshape(-1, 1)],
-                [irredundant, ~must_be_positive.reshape(-1, 1)]])
 
         # prepare arguments for feasibility check
+        Xk = X[:,:k+1] # leading vertices
         if canonical:
-            # omit redundant constraints and omit checks where new constraint is redundant
-            args = [(X[:,:len(y)][:,keep], y[keep], canonical) for y, keep in zip(Y, irredundant) if keep[-1]]
+            # only check hemichotomies where new constraint is not redundant
+            check = irredundant[:,-1]
+            # omit redundant constraints from check
+            args = [(Xk[:,irr], y[irr], canonical) for y, irr in zip(Y[check], irredundant[check])]
         else:
-            args = [(X[:,:len(y)], y, canonical) for y in Y]
+            args = [(Xk, y, canonical) for y in Y]
 
-        # check feasibility of leading hemichotomies
+        # check feasibility of leading hemichotomies in parallel
         with Pool(num_procs) as pool:
             results = pool.map(check_feasibility, args)
 
         # prune hemichotomies that are not linearly separable
         if canonical:
+            # gather results
             feasible, w = zip(*results)
+
+            # expand to all hemichotomies, not only those checked
             keep = np.ones(len(Y), dtype=bool)
-            keep[irredundant[:,-1]] = feasible
-            W[irredundant[:,-1]] = np.stack(w)
+            keep[check] = feasible
+            W[check] = np.stack(w)
+
+            # prune the infeasible ones
             Y = Y[keep]
             W = W[keep]
             irredundant = irredundant[keep]
@@ -151,24 +163,32 @@ if __name__ == "__main__":
             ltms = np.load(fname)
             Y, W, X = ltms["Y"], ltms["W"], ltms["X"]
 
+        # display number of linearly separable hemichotomies
         message = f"N={N}: {len(Y)} hemis"
     
-        # print(W.round(1).T)
-        # print(np.hstack((W.round(1), Y)))
-        # print(Y.shape, W.shape, X.shape)
-
-        # count with all symmetries, only works for integer weights N < 9
+        # if canonical, count all non-canonical regions in each symmetry equivalence class
+        # assumes integer weights invariant to same symmetries as their regions
+        # may break for N >= 8 [Muroga 1970]
         if canonical:
-            num_sym = 0
-            for i, w in enumerate(W.round()):
-                # get multiset coefficient
-                uni = {}
-                for n in range(N): uni[w[n]] = uni.get(w[n], 0) + 1
-                num_sym_i = factorial(sum(uni.values()))
-                for v in uni.values(): num_sym_i /= factorial(v)
-                num_sym += num_sym_i * 2**np.count_nonzero(w)
+            region_count = 0
 
-            message += f" ({num_sym} non canonical)"
+            # count equivalence class of each weight vector
+            for i, w in enumerate(W.round()):
+
+                # get multiset of weight values and their counts
+                multiset = {}
+                for n in range(N):
+                    multiset[w[n]] = multiset.get(w[n], 0) + 1
+
+                # count distinct permutations by multiset coefficient
+                num_perms = factorial(sum(multiset.values()))
+                for v in multiset.values():
+                    num_perms /= factorial(v)
+
+                # any non-zero weight can also have its sign flipped
+                region_count += num_perms * 2**np.count_nonzero(w)
+
+            message += f" ({region_count} regions including non-canonical)"
 
         print(message)
 
