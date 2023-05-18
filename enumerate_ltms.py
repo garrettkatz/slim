@@ -52,7 +52,8 @@ def check_feasibility(args):
 
     # count failed runs as infeasible
     if w is None:
-        return False, w # feasible=False, w
+        feasible, w = False, np.empty(N)
+        return feasible, w
 
     # re-canonicalize solution in case of small round-off error
     if canonical:
@@ -109,7 +110,7 @@ def enumerate_ltms(N, canonical=True):
         else:
             args = [(X[:,:len(y)], y, canonical) for y in Y]
 
-        # check feasibility of each leading hemichotomy
+        # check feasibility of leading hemichotomies
         with Pool(num_procs) as pool:
             results = pool.map(check_feasibility, args)
 
@@ -136,9 +137,9 @@ if __name__ == "__main__":
     canonical = True
 
     if len(sys.argv) > 1:
-        Ns = [int(sys.argv[1])]
-    else:
-        Ns = list(range(3,9))
+        N_max = int(sys.argv[1])
+
+    Ns = list(range(3, N_max + 1))
 
     for N in Ns:
         fname = f"ltms_{N}{'_c' if canonical else ''}.npz"
