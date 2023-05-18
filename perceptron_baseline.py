@@ -85,9 +85,7 @@ if __name__ == "__main__":
         (all_num_iters, all_mistakes) = pk.load(f)
 
     # convert iters to epochs, 2**(N-1) iters per
-    all_num_epochs = np.array([
-        num_iters / 2**(N-1)
-        for (num_iters, N) in zip(all_num_iters, Ns)])
+    all_num_epochs = [num_iters / 2**(N-1) for (num_iters, N) in zip(all_num_iters, Ns)]
 
     # get average/stdev metrics for each N, weighted by equivalence class sizes
     avg_iters, std_iters = np.empty(len(Ns)), np.empty(len(Ns))
