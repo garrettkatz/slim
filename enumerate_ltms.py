@@ -70,8 +70,12 @@ def enumerate_ltms(N, canonical=True):
     X = np.array(tuple(it.product((-1, +1), repeat=N-1))).T
     X = np.vstack((-np.ones(2**(N-1), dtype=int), X))
 
-    # initialize leading portion of hemichotomies
-    Y = np.array([[-1, +1]]).T
+    # initialize weights and leading portion of hemichotomies
+    if canonical:
+        Y = np.array([[-1]]).T
+    else:
+        Y = np.array([[-1, +1]]).T
+    W = np.empty((len(Y), N))
 
     # initialize irredundant constraint tracking
     if canonical:
@@ -90,6 +94,7 @@ def enumerate_ltms(N, canonical=True):
         Y = np.block([
             [Y, -np.ones((Y.shape[0], 1), dtype=int)],
             [Y, +np.ones((Y.shape[0], 1), dtype=int)]])
+        W = np.concatenate((W, W), axis=0)
 
         # track irredundant constraints
         if canonical:
@@ -97,22 +102,31 @@ def enumerate_ltms(N, canonical=True):
                 [irredundant, ~must_be_negative.reshape(-1, 1)],
                 [irredundant, ~must_be_positive.reshape(-1, 1)]])
 
+        # prepare arguments for feasibility check
+        if canonical:
+            # omit redundant constraints and omit checks where new constraint is redundant
+            args = [(X[:,:len(y)][:,keep], y[keep], canonical) for y, keep in zip(Y, irredundant) if keep[-1]]
+        else:
+            args = [(X[:,:len(y)], y, canonical) for y in Y]
+
         # check feasibility of each leading hemichotomy
         with Pool(num_procs) as pool:
-            if canonical:
-                args = [(X[:,:len(y)][:,keep], y[keep], canonical) for y, keep in zip(Y, irredundant)]
-            else:
-                args = [(X[:,:len(y)], y, canonical) for y in Y]
             results = pool.map(check_feasibility, args)
-            feasible, W = zip(*results)
 
-        # infeasible hemichotomies are not linearly separable, prune
-        feasible = np.array(feasible)
-        Y = Y[feasible]
+        # prune hemichotomies that are not linearly separable
         if canonical:
-            irredundant = irredundant[feasible]
+            feasible, w = zip(*results)
+            keep = np.ones(len(Y), dtype=bool)
+            keep[irredundant[:,-1]] = feasible
+            W[irredundant[:,-1]] = np.stack(w)
+            Y = Y[keep]
+            W = W[keep]
+            irredundant = irredundant[keep]
 
-    W = np.stack(W)[feasible]
+        else:
+            feasible, W = zip(*results)
+            Y = Y[feasible]
+            W = np.stack(W)[feasible]
 
     return Y, W, X
 
