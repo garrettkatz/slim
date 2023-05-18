@@ -6,81 +6,93 @@ from scipy.optimize import linprog, OptimizeWarning
 from scipy.linalg import LinAlgWarning
 from scipy.special import factorial
 import warnings
+from multiprocessing import Pool, cpu_count
 
 warnings.filterwarnings("ignore", category=LinAlgWarning)
 warnings.filterwarnings("ignore", category=OptimizeWarning)
 # np.set_printoptions(formatter={"int": lambda x: "%+d" % x, "float": lambda x: "%.3f" % x}, linewidth=1000)
 np.set_printoptions(formatter={"int": lambda x: "%+d" % x}, linewidth=1000)
 
-def enumerate_ltms(N, canonical=False):
+num_procs = cpu_count()-1
 
-    # more numerically stable linprog without antiparallel data
-    X = np.array(tuple(it.product((-1, +1), repeat=N-1))).T
-    X = np.vstack((-np.ones(2**(N-1), dtype=int), X))
+def check_feasibility(args):
+    X, y, canonical = args
 
-    # additional constraints for canonical
+    # region constraints
+    A_ub = -(X * y).T
+    b_ub = -np.ones(A_ub.shape[0])
+
     if canonical:
+
+        # non-negative sorted constraint
         A_c = np.eye(N, k=-1) - np.eye(N) # w[0] >= 0, w[i] >= w[i-1]
         b_c = np.zeros(N)
 
+        # combine with region constraints
+        A_ub = np.concatenate((A_ub, A_c), axis=0)
+        b_ub = np.concatenate((b_ub, b_c))
+
+        # minimum weight objective when all weights positive
+        c = np.ones(N)
+
+    else:
+
+        # make the problem bounded
+        c = -A_ub.sum(axis=0)
+
+    # run the linear program
+    result = linprog(
+        c = c,
+        A_ub = A_ub,
+        b_ub = b_ub,
+        bounds = (None, None),
+        method='simplex', # other methods miss some solutions
+    )
+    w = result.x
+
+    # count failed runs as infeasible
+    if w is None:
+        return False, w # feasible=False, w
+
+    # re-canonicalize solution in case of small round-off error
+    if canonical:
+        w = np.sort(np.fabs(w))
+
+    # separate check that all region constraints satisfied
+    feasible = (np.sign(w @ X) == y).all()
+
+    # return results
+    return feasible, w
+
+def enumerate_ltms(N, canonical=False):
+
+    # generate half-cube vertices
+    X = np.array(tuple(it.product((-1, +1), repeat=N-1))).T
+    X = np.vstack((-np.ones(2**(N-1), dtype=int), X))
+
+    # initialize leading portion of hemichotomies
     Y = np.array([[-1, +1]]).T
+
+    # iteratively extend hemichotomy tail
     for j in range(1, 2**(N-1)):
         print(f"{j} of {2**(N-1)}, {2*Y.shape[0]} dichots to check")
 
+        # append next possible bits to leading hemichotomy
         Y = np.block([
             [Y, -np.ones((Y.shape[0], 1), dtype=int)],
             [Y, +np.ones((Y.shape[0], 1), dtype=int)]])
 
-        feasible = np.empty(Y.shape[0], dtype=bool)
-        W = {}
-        Y_set = set() # for canonical
-        for k, y in enumerate(Y):
+        # check feasibility of each leading hemichotomy
+        with Pool(num_procs) as pool:
+            args = [(X[:,:len(y)], y, canonical) for y in Y]
+            results = pool.map(check_feasibility, args)
+            feasible, W = zip(*results)
 
-            A_ub = -(X[:,:j+1] * y).T
-            b_ub = -np.ones(j+1)
-            c = -A_ub.sum(axis=0)
-
-            if canonical:
-                A_ub = np.concatenate((A_ub, A_c), axis=0)
-                b_ub = np.concatenate((b_ub, b_c))
-                c = np.ones(N) # minimum weight objective when all weights positive
-
-            result = linprog(
-                c = c,
-                A_ub = A_ub,
-                b_ub = b_ub,
-                bounds = (None, None),
-                method='simplex',
-                # method='highs-ipm',
-                # method='revised simplex', # this and high-ds miss some solutions
-            )
-            if result.x is not None:
-                W[k] = result.x
-
-                if canonical:
-                    # canonicalize to counteract rounding error in w order and non-negative constraints
-                    W[k] = np.sort(np.fabs(W[k]))
-                    yk = np.sign(W[k] @ X[:,:j+1]).astype(int)
-                    feasible[k] = (yk == y).all()
-
-                    # avoid canonical duplicates
-                    yk = tuple(yk)
-                    if yk in Y_set:
-                        feasible[k] = False # flag duplicate for removal
-                    elif feasible[k]:
-                        Y_set.add(yk)
-
-                else:
-                    # not canonical, just sanity check region constraints
-                    yk = np.sign(W[k] @ X[:,:j+1]).astype(int)
-                    feasible[k] = (yk == y).all()
-
-            else:
-                feasible[k] = False
-
+        # infeasible hemichotomies are not linearly separable, prune
+        feasible = np.array(feasible)
         Y = Y[feasible]
 
-    W = np.stack([W[k] for k in np.flatnonzero(feasible)])
+    W = np.stack(W)[feasible]
 
     return Y, W, X
 
@@ -95,7 +107,6 @@ if __name__ == "__main__":
         Ns = list(range(3,9))
 
     for N in Ns:
-        print(N)
         fname = f"ltms_{N}{'_c' if canonical else ''}.npz"
 
         if do_gen:
@@ -104,12 +115,14 @@ if __name__ == "__main__":
         else:
             ltms = np.load(fname)
             Y, W, X = ltms["Y"], ltms["W"], ltms["X"]
-    
-        print(W.round(1))
-        # print(np.hstack((W.round(1), Y)))
-        print(Y.shape, W.shape, X.shape)
 
-        # count with all symmetries, only works for integer weights N < 8
+        message = f"N={N}: {len(Y)} hemis"
+    
+        # print(W.round(1).T)
+        # print(np.hstack((W.round(1), Y)))
+        # print(Y.shape, W.shape, X.shape)
+
+        # count with all symmetries, only works for integer weights N < 9
         if canonical:
             num_sym = 0
             for i, w in enumerate(W.round()):
@@ -120,9 +133,9 @@ if __name__ == "__main__":
                 for v in uni.values(): num_sym_i /= factorial(v)
                 num_sym += num_sym_i * 2**np.count_nonzero(w)
 
-            print(f"{num_sym} regions with symmetry")
+            message += f" ({num_sym} non canonical)"
 
-        # print(W)
+        print(message)
 
     # # full X and Y
     # X = np.array(tuple(it.product((-1, +1), repeat=N))).T
