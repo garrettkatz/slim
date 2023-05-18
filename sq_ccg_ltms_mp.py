@@ -1,6 +1,6 @@
+import sys
 import pickle as pk
 import numpy as np
-from adjacent_ltms import adjacency
 import matplotlib.pyplot as pt
 import matplotlib as mp
 from numpy.linalg import norm
@@ -16,137 +16,99 @@ warnings.filterwarnings("ignore", category=OptimizeWarning)
 
 np.set_printoptions(threshold=10e6)
 
-# from cvxopt.solvers import qp, options
-# from cvxopt import matrix
-# options['show_progress'] = False
-
 mp.rcParams['font.family'] = 'serif'
 
-def descent_direction(args):
-    sq_grad_r, A_ub, b_ub, A_eq, b_eq = args
+# save one core when multiprocessing
+num_procs = cpu_count()-1
 
-    result = linprog(
-        c = sq_grad_r,
-        A_ub = A_ub,
-        b_ub = b_ub,
-        A_eq = A_eq,
-        b_eq = b_eq,
+# helper for pooled descent direction linear programs
+def descent_direction(args):
+    c, A_ub, b_ub, A_eq, b_eq = args
+
+    # run the linear program
+    result = linprog(*args,
         bounds = (None, None),
-        method='simplex',
-        # method='highs-ipm',
-        # method='revised simplex', # this and high-ds miss some solutions
+        method = 'simplex', # other methods may miss some solutions
     )
 
-    delta_r = result.x
-    return delta_r
+    u_r = result.x
+    return u_r
 
 # @profile
 def main():
 
-    num_procs = cpu_count()-1
-
-    do_opt = True
-    # do_opt = False
-
-    # postfix = '' # exp
-    # postfix = '_jaggi'
-    # postfix = '_sqrt'
-    postfix='_ana'
-    
-    N = 4 # dim
+    do_opt = True # whether to run the optimization or just load results
+    num_updates = int(1e6) # maximum number of updates if stopping criterion not reached
+    save_period = int(1e3) # number of updates between saving intermediate results
     eps = 0.1 # constraint slack threshold
-    lr = .1 # learning rate
-    decay = .99 # lr decay
-    num_updates = 100
 
-    # N = 5 # dim
-    # eps = 0.1 # constraint slack threshold
-    # lr = 0.05 # learning rate
-    # decay = .99 # lr decay
-    # num_updates = 500
-
-    # N = 6 # dim
-    # eps = 0.1 # constraint slack threshold
-    # lr = 0.02 # learning rate
-    # decay = .995 # lr decay
-    # num_updates = 50000
-
-    # N = 7 # dim
-    # eps = 0.1 # constraint slack threshold
-    # lr = 0.005 # learning rate
-    # decay = .999 # lr decay
-    # num_updates = 1_000_000
+    # input dimension for optimization
+    if len(sys.argv) > 1:
+        N = int(sys.argv[1])
+    else:
+        N = 4
 
     # load canonical regions and adjacencies
     ltms = np.load(f"ltms_{N}_c.npz")
     Yc, Wc, X = ltms["Y"], ltms["W"], ltms["X"]
     with open(f"adjs_{N}_c.npz", "rb") as f:
         (Yn, Wn) = pk.load(f)
+    with open(f"adjs_{N}_jc.npz", "rb") as f:
+        Ac = pk.load(f)
 
     # set up boundary indices to remove redundant region constraints
-    Kn = {}
+    K = {}
     for i in Yn:
-        Kn[i] = (Yc[i] != Yn[i]).argmax(axis=1)
+        K[i] = (Yc[i] != Yn[i]).argmax(axis=1)
 
-    # set up projection matrices
+    # batch set up of projection matrices, PX[k] is matrix for vertex k
     PX = np.eye(N) - X.T.reshape(-1, N, 1) * X.T.reshape(-1, 1, N) / N
 
-    # save original
+    # save original lp weights
     W_lp = Wc.copy()
-    B_eq = (W_lp * W_lp).sum(axis=1) # 'norm' constraint
 
-    # set up equality constraints for region<->weight invariance
-    A_sym = []
-    for i, w in enumerate(Wc):
-        w = w.round().astype(int) # will not work past n=8
-        A_sym_i = np.eye(N-1,N) - np.eye(N-1,N,k=1) # retain w[n] - w[n+1] == 0
-        A_sym_i = A_sym_i[w[:-1] == w[1:]] # i.e. w[n] == w[n+1] as constraint
-        if w[0] == 0: # zeros must stay so
-            A_sym_i = np.concatenate((np.eye(1,N), A_sym_i), axis=0)
-        A_sym.append(A_sym_i)
-
-    # canonical adjacency matrix
-    Ac = set()
-    for i in range(len(Yn)):
-        for j in range(len(Yn[i])):
-            # canonicalize neighbor
-            w = np.sort(np.fabs(Wn[i][j]))
-            y = np.sign(w @ X)
-            j = (y == Yc).all(axis=1).argmax()
-            assert (y == Yc[j]).all() # hypothesis that every adjacency has joint canonicalization
-            k = (Yc[j] == Yc[i]).argmin()
-            Ac.add((i,j,k))
-    Ac = tuple(Ac)
+    # # set up equality constraints for weights invariant to same symmetries as their regions
+    # # doesn't converge to zero span loss
+    # A_sym = []
+    # for i, w in enumerate(Wc):
+    #     w = w.round().astype(int) # will not work past n=8
+    #     A_sym_i = np.eye(N-1,N) - np.eye(N-1,N,k=1) # retain w[n] - w[n+1] == 0
+    #     A_sym_i = A_sym_i[w[:-1] == w[1:]] # i.e. w[n] == w[n+1] as constraint
+    #     if w[0] == 0: # zeros must stay so
+    #         A_sym_i = np.concatenate((np.eye(1,N), A_sym_i), axis=0)
+    #     A_sym.append(A_sym_i)
 
     if do_opt:
 
-        # make multiprog coef args once for mp mode
-        coef_args = []
+        # set up constant descent direction args once
+        dd_args = []
         for r in range(len(W_lp)):
-            # norm constraints
-            A_eq = W_lp[r:r+1].copy()
-            b_eq = B_eq[r:r+1].copy()
-            # faster with only boundary region constraints
-            A_ub = -(X[:,Kn[r]] * Yc[r, Kn[r]]).T
-            b_ub = -np.ones(len(Kn[r]))*eps
-            # save
-            coef_args.append((A_ub, b_ub, A_eq, b_eq))
 
-        # gradient update loop
-        loss_curve = []
-        sq_loss_curve = []
-        extr_curve = []
-        gn_curve = []
-        pgn_curve = [] # projected gradient
-        cos_curve = []
-        scale_curve = []
+            # counteract weight norm shrinking
+            A_eq = W_lp[r:r+1].copy()
+            b_eq = (A_eq**2).sum(axis=1)
+
+            # irredundant region constraints (only boundaries)
+            A_ub = -(X[:,K[r]] * Yc[r, K[r]]).T
+            b_ub = -np.ones(len(K[r]))*eps
+
+            # save for later
+            dd_args.append((A_ub, b_ub, A_eq, b_eq))
+
+        # optimization metrics
+        loss_curve = [] # span loss
+        grad_curve = [] # projected gradient norm
+        slack_curve = [] # constraint slack
+        angle_curve = [] # max angle
+        gamma_curve = [] # line search step size
+
+        # optimization loop
         for update in range(num_updates):
 
-            # loss and gradient on joint-canonical adjacencies
-            loss, sq_loss = 0., 0.
-            max_1mc = 0
+            # calculate loss and gradient on joint-canonical adjacencies
+            loss = 0.
+            min_cos = 1.
             grad = np.zeros(Wc.shape)
-            sq_grad = np.zeros(Wc.shape)
             for (i,j,k) in Ac:
 
                 # get projected weights
@@ -154,106 +116,80 @@ def main():
                 Pk = PX[k]
                 wiPk = wi @ Pk
                 wjPk = wj @ Pk
+                wiPkwi = wiPk @ wiPk
                 wiPkwj = wiPk @ wjPk
                 wjPkwj = wjPk @ wjPk
                 wiPk_n, wjPk_n = norm(wiPk), norm(wjPk)
 
-                # check minimum cosine
-                max_1mc = max(max_1mc, 1. - wiPkwj / (wiPk_n * wjPk_n))
+                # track minimum cosine
+                min_cos = min(min_cos, wiPkwj / (wiPk_n * wjPk_n))
     
                 # accumulate span loss
-                loss += wiPk_n*wjPk_n - wiPk @ wjPk
+                loss += wiPkwi * wjPkwj - wiPkwj**2
     
                 # accumulate gradient
-                grad[i] += 2 * (wiPk * wjPk_n / wiPk_n - wjPk)
+                grad[i] += 4 * (wiPk * wjPkwj - wiPkwj * wjPk)
 
-                # accumulate span loss
-                sq_loss += (wiPk @ wiPk)*(wjPk @ wjPk) - wiPkwj**2 # sq version
-    
-                # accumulate gradient
-                sq_grad[i] += 4 * (wiPk * wjPkwj - wiPkwj * wjPk) # sq version
-
-            gn_curve.append(norm(sq_grad.flatten()))
-            cos_curve.append(max_1mc)
+            max_angle = np.arccos(min_cos)
+            angle_curve.append(max_angle)
             loss_curve.append(loss)
-            sq_loss_curve.append(sq_loss)
 
-            # Frank-Wolfe projections
-
-            # multiproc solve for delta
-            args = [(sq_grad[r].copy(),) + coefs for r,coefs in enumerate(coef_args)]
+            # Pooled decent direction calculation
+            args = [(grad[r].copy(),) + args for r,args in enumerate(dd_args)]
             with Pool(num_procs) as pool:
-                delta = pool.map(descent_direction, args)
-                delta = np.vstack(delta)
+                u = pool.map(descent_direction, args)
+            U = np.vstack(u)
+            Delta = U - Wc
 
-            # convert delta to a step
-            delta = delta - Wc
+            # analytical line search
+            cubic = [0, 0, 0, 0] # coefficients of line search derivative (cubic polynomial)
+            step_grad = np.zeros(grad.shape) # sanity check gradient at end of step (gamma = 1)
+            for (i,j,k) in Ac:
 
-            # calculate step scaling
-            if postfix == '':
-                step_scale = lr * decay**update
+                # get weight and delta projections
+                di, dj, wi, wj, xk = Delta[i], Delta[j], Wc[i], Wc[j], X[:,k]
+                Pk = PX[k]
+                wiPk = wi @ Pk
+                wjPk = wj @ Pk
+                diPk = di @ Pk
+                djPk = dj @ Pk
 
-            elif postfix == '_jaggi':
-                step_scale = 2 / (update + 2) # frank-wolfe default, maybe only for convex opt?
+                # accumulate span loss gradient at gamma = 1
+                vi, vj = wiPk + diPk, wjPk + djPk
+                step_grad[i] += 4 * (vi * (vj @ vj) - (vi @ vj) * vj)
 
-            elif postfix == '_sqrt':
-                step_scale = .5 / (update + 1)**.5
+                # accumulate cubic coefficients
+                cubic[0] += wjPk @ (wjPk[:,np.newaxis] * wiPk - wiPk[:,np.newaxis] * wjPk) @ diPk
+                cubic[1] += 2*(wjPk @ djPk)*(wiPk @ diPk) + (wjPk @ wjPk)*(diPk @ diPk) \
+                            - (wiPk @ wjPk)*(djPk @ diPk) - (wjPk @ diPk)*(diPk @ wjPk + wiPk @ djPk)
+                cubic[2] += 2*(wjPk @ djPk)*(diPk @ diPk) + (wiPk @ diPk)*(djPk @ djPk) \
+                            - (wjPk @ diPk)*(diPk @ djPk) - (djPk @ diPk)*(diPk @ wjPk + wiPk @ djPk)
+                cubic[3] += djPk @ (djPk[:,np.newaxis] * diPk - diPk[:,np.newaxis] * djPk) @ diPk
 
-            elif postfix == '_ana':
+            cubic = [4*cub for cub in cubic]
 
-                cubic = [0, 0, 0, 0]
-                step_grad = np.zeros(grad.shape) # gradient at end of step (gamma step_scale = 1)
-                for (i,j,k) in Ac:
+            # sanity check correct cubic coefficients at gamma = 0 and gamma = 1
+            assert np.allclose(cubic[0], (grad * Delta).sum())
+            assert np.allclose(sum(cubic), (step_grad * Delta).sum())
 
-                    # get projections
-                    di, dj, wi, wj, xk = delta[i], delta[j], Wc[i], Wc[j], X[:,k]
-                    Pk = PX[k]
-                    wiPk = wi @ Pk
-                    wjPk = wj @ Pk
-                    diPk = di @ Pk
-                    djPk = dj @ Pk
+            # get extrema of line search objective in [0, 1]
+            cubic = Polynomial(cubic)
+            roots = cubic.roots()
+            gammas = np.append(roots.real, (0., 1.))
+            gammas = gammas[(0 <= gammas) & (gammas <= 1)]
 
-                    # accumulate span grad at step scale == 1
-                    vi, vj = wiPk + diPk, wjPk + djPk
-                    step_grad[i] += 4 * (vi * (vj @ vj) - (vi @ vj) * vj) # have to use sq version
-
-                    # accumulate cubic coefficients
-                    cubic[0] += wjPk @ (wjPk[:,np.newaxis] * wiPk - wiPk[:,np.newaxis] * wjPk) @ diPk
-                    cubic[1] += 2*(wjPk @ djPk)*(wiPk @ diPk) + (wjPk @ wjPk)*(diPk @ diPk) \
-                                - (wiPk @ wjPk)*(djPk @ diPk) - (wjPk @ diPk)*(diPk @ wjPk + wiPk @ djPk)
-                    cubic[2] += 2*(wjPk @ djPk)*(diPk @ diPk) + (wiPk @ diPk)*(djPk @ djPk) \
-                                - (wjPk @ diPk)*(diPk @ djPk) - (djPk @ diPk)*(diPk @ wjPk + wiPk @ djPk)
-                    cubic[3] += djPk @ (djPk[:,np.newaxis] * diPk - diPk[:,np.newaxis] * djPk) @ diPk
-
-                cubic = [4*cub for cub in cubic]
-
-                # sanity check correct cubic coefficients at gamma = 0 and gamma = 1
-                assert np.allclose(cubic[0], (sq_grad * delta).sum())
-                assert np.allclose(sum(cubic), (step_grad * delta).sum())
-
-                # find min value of any real roots in [0, 1]
-                cubic = Polynomial(cubic)
-                quartic = cubic.integ()
-                roots = cubic.roots()
-                gammas = np.append(roots.real, (0., 1.))
-                gammas = gammas[(0 <= gammas) & (gammas <= 1)]
-                vals = gammas[:,np.newaxis]**np.arange(5) @ quartic.coef
-                step_scale = gammas[vals.argmin()]
-                if step_scale == 0.:
-                    print(roots)
-                    print(cubic.coef)
-                    print(roots[:,np.newaxis]**np.arange(4) @ cubic.coef)
-                    print(gammas)
-                    print(quartic.coef)
-                    print(vals)
+            # evaluate extrema to find global min
+            quartic = cubic.integ()
+            evals = gammas[:,np.newaxis]**np.arange(5) @ quartic.coef
+            gamma = gammas[evals.argmin()]
 
             # take step
-            scale_curve.append(step_scale)
-            Wc = Wc + step_scale * delta # stays in interior as long as delta feasible and 0 <= step_scale <= 1
+            gamma_curve.append(gamma)
+            Wc = Wc + gamma * Delta # stays in interior as long as 0 <= gamma <= 1
 
             # calculate norm of projected gradient
-            pgnorm = np.fabs((sq_grad * delta).sum()) / norm(delta)
-            pgn_curve.append(pgnorm)
+            pgnorm = np.fabs((grad * Delta).sum()) / norm(Delta)
+            grad_curve.append(pgnorm)
 
             # stop if infeasible, should not happen (but numerical issues when eps = 0)
             if eps > 0:
@@ -262,72 +198,44 @@ def main():
                     print("infeasible")
                     break
     
-            # check distance to feasible boundary
-            extreme = np.fabs(Wc @ X).min()
+            # constraint slack
+            slack = np.fabs(Wc @ X).min()
+            slack_curve.append(slack)
 
-            message = f"{update}/{num_updates}: loss={loss}, 1-cos<={max_1mc}), |sqgrad|={norm(sq_grad.flatten())}, |psqgrad|={pgnorm**0.5}, extremality={extreme}, lr={step_scale}"
+            message = f"{update}/{num_updates}: loss={loss}, angle<={max_angle}), |pgrad|={pgnorm**0.5}, slack={slack}, gamma={gamma}"
             print(message)
-            extr_curve.append(extreme)
 
-            if step_scale == 0:
-                print("hit gamma=0 (L=0?)")
+            # check stopping criterion
+            early_stop = (gamma == 0.)
+
+            # save intermediate or final results
+            if early_stop or (update + 1 == num_updates) or (update % save_period == 0):
+                with open(f"sq_ccg_ltm_mp_{N}.pkl", "wb") as f:
+                    pk.dump((Wc, loss_curve, slack_curve, grad_curve, angle_curve, gamma_curve), f)
+
+            if early_stop:
+                print("stopping early, reached gamma=0")
                 break
-    
-            np.set_printoptions(formatter = {'float': lambda x: "%+.3f" % x})
-    
-        with open(f"sq_ccg_ltm_mp_{N}{postfix}.pkl", "wb") as f:
-            pk.dump((Wc, sq_loss_curve, loss_curve, extr_curve, gn_curve, pgn_curve, cos_curve, scale_curve), f)
 
-    with open(f"sq_ccg_ltm_mp_{N}{postfix}.pkl", "rb") as f:
-        (Wc, sq_loss_curve, loss_curve, extr_curve, gn_curve, pgn_curve, cos_curve, scale_curve) = pk.load(f)
+    # load results
+    with open(f"sq_ccg_ltm_mp_{N}.pkl", "rb") as f:
+        (Wc, loss_curve, slack_curve, grad_curve, angle_curve, gamma_curve) = pk.load(f)
 
-    np.set_printoptions(formatter={'float': lambda x: "%+0.2f" % x})
-
+    # suppress large wall of text for N >= 6
     if N < 6:
-        print("\n" + "*"*8 + " change " + "*"*8 + "\n")
+        np.set_printoptions(formatter={'float': lambda x: "%+0.2f" % x})
+
+        print("\n" + "*"*8 + " change in weights " + "*"*8 + "\n")
     
         for i in range(len(Wc)):
             print(W_lp[i], Wc[i], np.fabs(Wc[i] @ X).min())
     
-        print("\n   ** adj\n")
-    
-        print("ab, wi, xk, wj, resid, ijk")
+        print("\n" + "*"*8 + " span coefficients and residuals " + "*"*8 + "\n")
+        print("wi ~ a * wj + b * xk, resid, ijk")
         for (i, j, k) in Ac:
             ab = np.linalg.lstsq(np.vstack((Wc[j], X[:,k])).T, Wc[i], rcond=None)[0]
             resid = np.fabs(Wc[i] - (ab[0]*Wc[j] + ab[1]*X[:,k])).max()
             print(Wc[i], ab[0], Wc[j], ab[1], X[:,k], resid, i,j,k)
-
-    fig, axs = pt.subplots(4,2, figsize=(6,8))
-    for do_log in (False, True):
-        pt.sca(axs[0,int(do_log)])
-        # pt.plot(loss_curve, 'k-')
-        pt.plot(np.array(sq_loss_curve) / len(Ac), 'k-', label="squared")
-        pt.plot(np.array(loss_curve) / len(Ac), 'k:', label="orig")
-        pt.ylabel("Span Loss")
-        if do_log: pt.yscale('log')
-        pt.legend()
-
-        pt.sca(axs[1,int(do_log)])
-        pt.plot(cos_curve, 'k-')
-        pt.ylabel("max 1 - cos")
-        if do_log: pt.yscale('log')
-
-        pt.sca(axs[2,int(do_log)])
-        pt.plot(extr_curve, 'k-')
-        pt.plot([0, len(extr_curve)], [eps, eps], 'k:')
-        pt.ylabel("Constraint Slack")
-        if do_log: pt.yscale('log')
-
-        pt.sca(axs[3,int(do_log)])
-        pt.plot(gn_curve, 'k:')
-        pt.plot(pgn_curve, 'k-')
-        pt.ylabel("Grad Norm")
-        if do_log: pt.yscale('log')
-        pt.xlabel("Optimization Step")
-    pt.tight_layout()
-    pt.savefig(f"sq_ccg_ltm_mp_{N}.pdf")
-    pt.show()
-
 
 if __name__ == "__main__": main()
 
