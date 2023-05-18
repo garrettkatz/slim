@@ -6,5 +6,7 @@ zip supplement.zip \
     perceptron_baseline.py \
     spanviol_ltms.py \
     plot_sq_ccg_ltms.py \
-    analyze_alpha_beta.py
+    analyze_alpha_beta.py \
+    README.md \
+    LICENSE
 
