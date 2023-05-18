@@ -64,7 +64,7 @@ def check_feasibility(args):
     # return results
     return feasible, w
 
-def enumerate_ltms(N, canonical=False):
+def enumerate_ltms(N, canonical=True):
 
     # generate half-cube vertices
     X = np.array(tuple(it.product((-1, +1), repeat=N-1))).T
@@ -73,24 +73,44 @@ def enumerate_ltms(N, canonical=False):
     # initialize leading portion of hemichotomies
     Y = np.array([[-1, +1]]).T
 
+    # initialize irredundant constraint tracking
+    if canonical:
+        irredundant = np.ones(Y.shape, dtype=bool)
+
     # iteratively extend hemichotomy tail
-    for j in range(1, 2**(N-1)):
-        print(f"{j} of {2**(N-1)}, {2*Y.shape[0]} dichots to check")
+    for k in range(1, 2**(N-1)):
+        print(f"{k} of {2**(N-1)}, {2*Y.shape[0]} dichots to check")
+
+        # identify new redundancies
+        if canonical:
+            must_be_negative = ((X[:,k:k+1] <= X[:,:k]).all(axis=0) & (Y < 0)).any(axis=1)
+            must_be_positive = ((X[:,k:k+1] >= X[:,:k]).all(axis=0) & (Y > 0)).any(axis=1)
 
         # append next possible bits to leading hemichotomy
         Y = np.block([
             [Y, -np.ones((Y.shape[0], 1), dtype=int)],
             [Y, +np.ones((Y.shape[0], 1), dtype=int)]])
 
+        # track irredundant constraints
+        if canonical:
+            irredundant = np.block([
+                [irredundant, ~must_be_negative.reshape(-1, 1)],
+                [irredundant, ~must_be_positive.reshape(-1, 1)]])
+
         # check feasibility of each leading hemichotomy
         with Pool(num_procs) as pool:
-            args = [(X[:,:len(y)], y, canonical) for y in Y]
+            if canonical:
+                args = [(X[:,:len(y)][:,keep], y[keep], canonical) for y, keep in zip(Y, irredundant)]
+            else:
+                args = [(X[:,:len(y)], y, canonical) for y in Y]
             results = pool.map(check_feasibility, args)
             feasible, W = zip(*results)
 
         # infeasible hemichotomies are not linearly separable, prune
         feasible = np.array(feasible)
         Y = Y[feasible]
+        if canonical:
+            irredundant = irredundant[feasible]
 
     W = np.stack(W)[feasible]
 
