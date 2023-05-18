@@ -10,9 +10,9 @@ from multiprocessing import Pool, cpu_count
 
 warnings.filterwarnings("ignore", category=LinAlgWarning)
 warnings.filterwarnings("ignore", category=OptimizeWarning)
-# np.set_printoptions(formatter={"int": lambda x: "%+d" % x, "float": lambda x: "%.3f" % x}, linewidth=1000)
 np.set_printoptions(formatter={"int": lambda x: "%+d" % x}, linewidth=1000)
 
+# save one core when multiprocessing
 num_procs = cpu_count()-1
 
 def check_feasibility(args):
@@ -81,12 +81,11 @@ def enumerate_ltms(N, canonical=True):
     # initialize irredundant constraint tracking
     if canonical:
         irredundant = np.ones(Y.shape, dtype=bool)
-
-        # also need to maintain feasibility and weights in this mode
+        # also maintain feasibilities and weights in this mode
         feasible = np.ones(len(Y), dtype=bool)
         W = np.empty((len(Y), N))
 
-    # iteratively extend hemichotomy tail
+    # iteratively extend hemichotomy tails
     for k in range(1, 2**(N-1)):
         print(f"{k} of {2**(N-1)}, {2*Y.shape[0]} leading hemis to check")
 
@@ -102,12 +101,12 @@ def enumerate_ltms(N, canonical=True):
             # duplicate W to match Y below
             W = np.tile(W, (2,1))
 
-        # append next possible bits to leading hemichotomy
+        # append next possible bits to leading hemichotomies
         Y = np.block([
             [Y, -np.ones((Y.shape[0], 1), dtype=int)],
             [Y, +np.ones((Y.shape[0], 1), dtype=int)]])
 
-        # prepare arguments for feasibility check
+        # prepare arguments for multiprocessing feasibility check
         Xk = X[:,:k+1] # leading vertices
         if canonical:
             # only check hemichotomies where new constraint is not redundant
@@ -131,7 +130,7 @@ def enumerate_ltms(N, canonical=True):
             keep[check] = feasible
             W[check] = np.stack(w)
 
-            # prune the infeasible ones
+            # only keep the feasible ones
             Y = Y[keep]
             W = W[keep]
             irredundant = irredundant[keep]
@@ -145,14 +144,15 @@ def enumerate_ltms(N, canonical=True):
 
 if __name__ == "__main__":
 
-    do_gen = True
-    canonical = True
+    do_gen = True # whether to re-generate the hemichotomies or only load them
+    canonical = True # whether to enumerate canonical hemichotomies only
 
+    # enumerate up to dimension N_max
     if len(sys.argv) > 1:
         N_max = int(sys.argv[1])
-
     Ns = list(range(3, N_max + 1))
 
+    # process dimensions one at a time
     for N in Ns:
         fname = f"ltms_{N}{'_c' if canonical else ''}.npz"
 
@@ -192,17 +192,3 @@ if __name__ == "__main__":
 
         print(message)
 
-    # # full X and Y
-    # X = np.array(tuple(it.product((-1, +1), repeat=N))).T
-    # Y = np.sign(W @ X)
-    # pad = 2
-    # YWX = np.full((Y.shape[0], Y.shape[1] + W.shape[1] + X.shape[1] + 2*pad), np.nan)
-    # YWX[:,:Y.shape[1]] = Y
-    # YWX[:,Y.shape[1]+pad:Y.shape[1]+pad+W.shape[1]] = W
-    # YWX[:X.shape[0], Y.shape[1]+pad+W.shape[1]+pad:] = X
-
-    # pt.imshow(YWX)
-    # pt.title("Y = sign(WX)")
-    # pt.axis('off')
-    # pt.colorbar()
-    # pt.show()

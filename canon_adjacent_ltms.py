@@ -4,105 +4,100 @@ import numpy as np
 from scipy.optimize import linprog, OptimizeWarning
 from scipy.linalg import LinAlgWarning
 import warnings
+from multiprocessing import Pool, cpu_count
+from enumerate_ltms import check_feasibility
 
 warnings.filterwarnings("ignore", category=LinAlgWarning)
 warnings.filterwarnings("ignore", category=OptimizeWarning)
 
-def canon_adjacency(X, Yc):
+# save one core when multiprocessing
+num_procs = cpu_count()-1
 
+# If i and j are adjacent, so are Si and Sj for any hypercube symmetry S.
+# This includes S that canonicalize i.
+# So we only need compute adjacencies where one region is canonical.
+#     X is the half-cube
+#     Y[r] is the hemichotomy for canonical region r
+def canon_adjacency(X, Y):
+
+    # generate all neighbors of each canonical hemichotomy
     Yn, Wn = {}, {}
-    for i, yc in enumerate(Yc):
-        print(f"adjacencies to region {i} of {len(Yc)}")
-        Yn[i], Wn[i] = [], []
-        for k in range(Yc.shape[1]):
-            yn = yc.copy()
-            yn[k] *= -1
+    for r, y in enumerate(Y):
+        print(f"adjacencies to region {r} of {len(Y)}")
 
-            # check neighbor feasibility
-            A_ub = -(X * yn).T
-            b_ub = -np.ones(len(A_ub))
-            c = -A_ub.sum(axis=0)
+        # set up all potential neighbors of y with one bit flipped
+        Yn[r] = y * ((-1) ** np.eye(len(y)))
 
-            result = linprog(
-                c = c,
-                A_ub = A_ub,
-                b_ub = b_ub,
-                bounds = (None, None),
-                method='simplex',
-                # method='highs-ipm',
-                # method='revised simplex', # this and high-ds miss some solutions
-            )
-            if result.x is not None:
-                wn = result.x
-                if (yn == np.sign(wn @ X)).all():
-                    Yn[i].append(yn)
-                    Wn[i].append(wn)
+        # prepare arguments for multiprocessing feasibility checks
+        canonical = False # neighbor might not be canonical
+        args = [(X, yn, canonical) for yn in Yn[r]]
 
-        Yn[i] = np.stack(Yn[i])
-        Wn[i] = np.stack(Wn[i])
+        # check feasibilities of neighbors in parallel
+        with Pool(num_procs) as pool:
+            results = pool.map(check_feasibility, args)
+
+        # discard infeasible neighbors
+        feasible, w = zip(*results)
+        feasible, w = np.array(feasible), np.stack(w)
+        Yn[r] = Yn[r][feasible]
+        Wn[r] = w[feasible]
 
     return Yn, Wn
 
 if __name__ == "__main__":
 
+    do_adj = True # whether to re-generate the adjacencies or only load them
+
+    # get adjacencies up to dimension N_max
     if len(sys.argv) > 1:
-        N = int(sys.argv[1])
-    else:
-        N = 3
+        N_max = int(sys.argv[1])
+    Ns = list(range(3, N_max + 1))
 
-    do_adj = True
-    do_adj = False
+    for N in Ns:
 
-    ltms = np.load(f"ltms_{N}_c.npz")
-    Y, W, X = ltms["Y"], ltms["W"], ltms["X"]
+        # load canonical hemis
+        ltms = np.load(f"ltms_{N}_c.npz")
+        Y, W, X = ltms["Y"], ltms["W"], ltms["X"]
+    
+        if do_adj:
+            # calculate all adjacent neighbors
+            Yn, Wn = canon_adjacency(X, Y)
+            with open(f"adjs_{N}_c.npz", "wb") as f:
+                pk.dump((Yn, Wn), f)
+    
+            # extract subset of joint-canonical adjacencies only
+            A = set()
+            for i, (yi, wi) in enumerate(zip(Y, W)):
+    
+                # process each neighbor
+                for n, (yn, wn) in enumerate(zip(Yn[i], Wn[i])):
+    
+                    # canonicalize neighbor
+                    wj = np.sort(np.fabs(wn))
+                    yj = np.sign(wj @ X)
+                    j = (yj == Y).all(axis=1).argmax()
+                    assert (yj == Y[j]).all()
 
-    if do_adj:
-        Yn, Wn = canon_adjacency(X, Y)
-        with open(f"adjs_{N}_c.npz", "wb") as f:
-            pk.dump((Yn, Wn), f)
+                    # empirically check that canonicalized neighbor is also adjacent
+                    assert (yi == yj).sum() == len(yi)-1 # exactly one flipped bit 
 
-    with open(f"adjs_{N}_c.npz", "rb") as f:
-        (Yn, Wn) = pk.load(f)
+                    # get boundary and add joint-canonicalized adjacency
+                    k = (yi == yj).argmin()
+                    A.add((i,j,k))
+    
+            A = tuple(A)
+            with open(f"adjs_{N}_jc.npz", "wb") as f:
+                pk.dump(A, f)
 
-    num_edges = 0
-    for i, (yc, wc) in enumerate(zip(Y, W)):
-        print("% 2d" % i, yc, wc.round().astype(int))
-        for yn, wn in zip(Yn[i], Wn[i]):
-            # print("  ", yn, wn.astype(int), (yc != yn).argmax())
-            num_edges += 1
+        # load results
+        with open(f"adjs_{N}_c.npz", "rb") as f:
+            (Yn, Wn) = pk.load(f)
+        with open(f"adjs_{N}_jc.npz", "rb") as f:
+            A = pk.load(f)
+    
+        # get total number of adjacencies stored
+        num_edges = sum(map(len, Yn.values()))
 
-    print(f"{num_edges} adjacencies stored")
+        print(f"{N}: {len(Y)} canonical regions, {num_edges} neighbors stored, {len(A)} joint-canonical adjacencies")
 
-    # canonical adjacency matrix
-    Ac = set()
-    ec_neighbors = {}
-    for i in range(len(Yn)):
-        ec_neighbors[i] = set()
-        for j in range(len(Yn[i])):
-            # canonicalize neighbor
-            w = np.sort(np.fabs(Wn[i][j]))
-            y = np.sign(w @ X)
-            j = (y == Y).all(axis=1).argmax()
-            assert (y == Y[j]).all()
-            k = (Y[j] == Y[i]).argmin()
-            Ac.add((i,j,k))
-            ec_neighbors[i].add(j)
-    Ac = tuple(Ac)
-    num_ec_neighbors = [(i, len(ec_neighbors[i])) for i in ec_neighbors]
-    print(f"{len(W)} canonical regions, {len(Ac)//2} joint-canonical adjacencies, ec neighbors:")
-    print(num_ec_neighbors)
-    print(ec_neighbors)
-
-    # check whether all adjacencies have a joint canonicalization
-    for i, (yc, wc) in enumerate(zip(Y, W)):
-        for yn, wn in zip(Yn[i], Wn[i]):
-
-            # canonicalize neighbor
-            wnc = np.sort(np.fabs(wn))
-            # get its hemichotomy
-            ync = np.sign(wnc @ X)
-            # check that canonicalized hemichotomy is also adjacent
-            assert (ync == Yn[i]).all(axis=1).any()
-
-    print("all adjacencies joint-canonicalizable")
 
