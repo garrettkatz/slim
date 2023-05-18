@@ -4,7 +4,7 @@ Anonymous et al. "Numerical Feasibility of One-Shot High-Capacity Learning in Li
 
 You can regenerate the results with these steps:
 
-1. Enumerate all the canonical hemichotomies with `python enumerate_ltms.py <N>`, where "<N>" is replaced with the input dimension you want to enumerate.  If you leave out N, it will do all N from 3 to 8 inclusive (8 may take many minutes).
+1. Enumerate all the canonical hemichotomies with `python enumerate_ltms.py <N>`, where "<N>" is replaced with the maximum input dimension you want to enumerate.  If you leave out N, it will do all N from 3 to 8 inclusive (takes about half an hour on an 8-core machine).
 
 1. Extract their adjacencies with `python canon_adjacent_ltms.py <N>`, again replacing "<N>" as desired
 
