@@ -72,7 +72,7 @@ def get_equivalence_class_size(w):
 
     # get multiset of weight values and their counts
     multiset = {}
-    for n in range(N):
+    for n in range(len(w)):
         multiset[w[n]] = multiset.get(w[n], 0) + 1
 
     # count distinct permutations by multiset coefficient
@@ -164,12 +164,14 @@ def enumerate_ltms(N, canonical=True):
 
 if __name__ == "__main__":
 
-    do_gen = False # whether to re-generate the hemichotomies or only load them
+    do_gen = True # whether to re-generate the hemichotomies or only load them
     canonical = True # whether to enumerate canonical hemichotomies only
 
     # enumerate up to dimension N_max
     if len(sys.argv) > 1:
         N_max = int(sys.argv[1])
+    else:
+        N_max = 8
     Ns = list(range(3, N_max + 1))
 
     # process dimensions one at a time
