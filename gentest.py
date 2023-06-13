@@ -10,7 +10,8 @@ if __name__ == "__main__":
 
     N, M = 3, 4
     N, M = 4, 8
-    ltms = np.load(f"ltms_{N}.npz")
+    # ltms = np.load(f"ltms_{N}.npz")
+    ltms = np.load(f"ltms_{N}_c.npz")
     Y, W, X = ltms["Y"], ltms["W"], ltms["X"]
 
     if do_gen:
