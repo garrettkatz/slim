@@ -17,6 +17,7 @@ num_procs = cpu_count()-1
 
 def check_feasibility(args):
     X, y, canonical = args
+    N = X.shape[0]
 
     # region constraints
     A_ub = -(X * y).T
