@@ -65,7 +65,6 @@ if __name__ == "__main__":
                     num_mistake_presentations[i, j] += 1
 
                     # apply weight update by perceptron learning rule
-                    # w = w + eta * y[j] * X[:,j] # Hebbian learning
                     w = w + eta * (y[j] - np.sign(w @ X[:,j])) * X[:,j] # Perceptron learning
 
                 # track total number of iterations until convergence
