@@ -19,7 +19,7 @@ def check_feasibility(args):
     X, y, canonical = args
     N = X.shape[0]
 
-    # region constraints
+    # regional constraints
     A_ub = -(X * y).T
     b_ub = -np.ones(A_ub.shape[0])
 
