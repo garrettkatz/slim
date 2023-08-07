@@ -80,10 +80,11 @@ if __name__ == "__main__":
 
     operators = [
         # scalar arithmetic
+        (("S", "S"), lambda a: -a),
+        (("S", "S"), lambda a: sm.zoo if a == 0 else 1/a),
+        (("S", "S"), lambda a: 0 if a == 0 else a/abs(a)), # sign
         (("S", "SS"), lambda a, b: a + b),
-        (("S", "SS"), lambda a, b: a - b),
         (("S", "SS"), lambda a, b: a * b),
-        (("S", "SS"), lambda a, b: a / b),
         (("S", "SS"), lambda a, b: a ** b),
         # vector arithmetic
         (("V", "SV"), lambda a, b: a * b),
@@ -97,7 +98,7 @@ if __name__ == "__main__":
     print(f"First {max_print} scalar expressions evaluated on inputs:")
     type_counts = {"V": 0, "S": 0}
 
-    for (out_type, expr, tree) in all_formulas(leaves, operators, depth=2):
+    for (out_type, expr, tree) in all_formulas(leaves, operators, depth=1):
     
         type_counts[out_type] += 1
 
