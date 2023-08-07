@@ -28,7 +28,7 @@ def svm_eval(X, Y, update_rule, num_runs):
         K = np.random.choice(Y[N].shape[1], size=T, replace=False) # example indices
 
         # get max-margin classifier via svm
-        svc = LinearSVC(fit_intercept=False)
+        svc = LinearSVC(dual='auto', fit_intercept=False)
         svc.fit(
             np.concatenate((X[N][:,K], -X[N][:,K]), axis=1).T,
             np.concatenate((Y[N][i,K], -Y[N][i,K]), axis=0))

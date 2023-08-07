@@ -38,17 +38,17 @@ if __name__ == "__main__":
 
     lr = 0.0001
 
-    # # quick test
-    # num_itrs = 20
-    # num_runs = 10
+    # quick test
+    num_itrs = 20
+    num_runs = 10
 
-    # big run
-    num_itrs = 10000
-    num_runs = 1000
+    # # big run
+    # num_itrs = 10000
+    # num_runs = 1000
 
     use_ham = False
 
-    do_train = False
+    do_train = True
 
     if use_ham: ops[0].extend([f"x{i}" for i in range(N)])
 

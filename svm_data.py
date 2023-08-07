@@ -19,7 +19,7 @@ def random_transitions(X, Y, N, B):
         y[b] = Y[N][i,k_new]
 
         # get max-margin classifiers via svm
-        svc = LinearSVC(fit_intercept=False)
+        svc = LinearSVC(dual='auto', fit_intercept=False)
         svc.fit(
             np.concatenate((X[N][:,K], -X[N][:,K]), axis=1).T,
             np.concatenate((Y[N][i,K], -Y[N][i,K]), axis=0))
@@ -29,7 +29,7 @@ def random_transitions(X, Y, N, B):
         if len(k_old) == 0:
             w_old[b] = np.zeros(N)
         else:
-            svc = LinearSVC(fit_intercept=False)
+            svc = LinearSVC(dual='auto', fit_intercept=False)
             svc.fit(
                 np.concatenate((X[N][:,k_old], -X[N][:,k_old]), axis=1).T,
                 np.concatenate((Y[N][i,k_old], -Y[N][i,k_old]), axis=0))
@@ -50,7 +50,7 @@ def all_transitions(X, Y, N, T=None):
             for K in it.combinations(range(Y[N].shape[1]), t):
 
                 # get max-margin classifier via svm
-                svc = LinearSVC(fit_intercept=False)
+                svc = LinearSVC(dual='auto', fit_intercept=False)
                 svc.fit(
                     np.concatenate((X[N][:,K], -X[N][:,K]), axis=1).T,
                     np.concatenate((Y[N][i,K], -Y[N][i,K]), axis=0))
