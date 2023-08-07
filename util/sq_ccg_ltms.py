@@ -38,17 +38,17 @@ def main():
     decay = .99 # lr decay
     num_updates = 100
 
-    N = 5 # dim
-    eps = 0.1 # constraint slack threshold
-    lr = 0.05 # learning rate
-    decay = .99 # lr decay
-    num_updates = 500
+    # N = 5 # dim
+    # eps = 0.1 # constraint slack threshold
+    # lr = 0.05 # learning rate
+    # decay = .99 # lr decay
+    # num_updates = 500
 
-    N = 6 # dim
-    eps = 0.1 # constraint slack threshold
-    lr = 0.02 # learning rate
-    decay = .995 # lr decay
-    num_updates = 10000
+    # N = 6 # dim
+    # eps = 0.1 # constraint slack threshold
+    # lr = 0.02 # learning rate
+    # decay = .995 # lr decay
+    # num_updates = 10000
 
     # N = 7 # dim
     # eps = 0.1 # constraint slack threshold
@@ -291,57 +291,58 @@ def main():
     
         with open(f"sq_ccg_ltm_{N}{postfix}.pkl", "wb") as f:
             pk.dump((Wc, sq_loss_curve, loss_curve, extr_curve, gn_curve, pgn_curve, cos_curve, scale_curve), f)
+            f.flush()
 
-    with open(f"sq_ccg_ltm_{N}{postfix}.pkl", "rb") as f:
-        # (Wc, sq_loss_curve, loss_curve, extr_curve, gn_curve, pgn_curve, cos_curve, scale_curve) = pk.load(f)
-        (Wc, sq_loss_curve, loss_curve, extr_curve, gn_curve, pgn_curve, cos_curve) = pk.load(f)
+    # with open(f"sq_ccg_ltm_{N}{postfix}.pkl", "rb") as f:
+    #     # (Wc, sq_loss_curve, loss_curve, extr_curve, gn_curve, pgn_curve, cos_curve, scale_curve) = pk.load(f)
+    #     (Wc, sq_loss_curve, loss_curve, extr_curve, gn_curve, pgn_curve, cos_curve) = pk.load(f)
 
-    np.set_printoptions(formatter={'float': lambda x: "%+0.2f" % x})
+    # np.set_printoptions(formatter={'float': lambda x: "%+0.2f" % x})
 
-    if N < 6:
-        print("\n" + "*"*8 + " change " + "*"*8 + "\n")
+    # if N < 6:
+    #     print("\n" + "*"*8 + " change " + "*"*8 + "\n")
     
-        for i in range(len(Wc)):
-            print(W_lp[i], Wc[i], np.fabs(Wc[i] @ X).min())
+    #     for i in range(len(Wc)):
+    #         print(W_lp[i], Wc[i], np.fabs(Wc[i] @ X).min())
     
-        print("\n   ** adj\n")
+    #     print("\n   ** adj\n")
     
-        print("ab, wi, xk, wj, resid, ijk")
-        for (i, j, k) in Ac:
-            ab = np.linalg.lstsq(np.vstack((Wc[i], X[:,k])).T, Wc[j], rcond=None)[0]
-            resid = np.fabs(ab[0]*Wc[i] + ab[1]*X[:,k] - Wc[j]).max()
-            print(ab, Wc[i], X[:,k], Wc[j], resid, i,j,k)
+    #     print("ab, wi, xk, wj, resid, ijk")
+    #     for (i, j, k) in Ac:
+    #         ab = np.linalg.lstsq(np.vstack((Wc[i], X[:,k])).T, Wc[j], rcond=None)[0]
+    #         resid = np.fabs(ab[0]*Wc[i] + ab[1]*X[:,k] - Wc[j]).max()
+    #         print(ab, Wc[i], X[:,k], Wc[j], resid, i,j,k)
 
-    fig, axs = pt.subplots(4,2, figsize=(6,8))
-    for do_log in (False, True):
-        pt.sca(axs[0,int(do_log)])
-        # pt.plot(loss_curve, 'k-')
-        pt.plot(np.array(sq_loss_curve) / len(Ac), 'k-', label="squared")
-        pt.plot(np.array(loss_curve) / len(Ac), 'k:', label="orig")
-        pt.ylabel("Span Loss")
-        if do_log: pt.yscale('log')
-        pt.legend()
+    # fig, axs = pt.subplots(4,2, figsize=(6,8))
+    # for do_log in (False, True):
+    #     pt.sca(axs[0,int(do_log)])
+    #     # pt.plot(loss_curve, 'k-')
+    #     pt.plot(np.array(sq_loss_curve) / len(Ac), 'k-', label="squared")
+    #     pt.plot(np.array(loss_curve) / len(Ac), 'k:', label="orig")
+    #     pt.ylabel("Span Loss")
+    #     if do_log: pt.yscale('log')
+    #     pt.legend()
 
-        pt.sca(axs[1,int(do_log)])
-        pt.plot(cos_curve, 'k-')
-        pt.ylabel("max 1 - cos")
-        if do_log: pt.yscale('log')
+    #     pt.sca(axs[1,int(do_log)])
+    #     pt.plot(cos_curve, 'k-')
+    #     pt.ylabel("max 1 - cos")
+    #     if do_log: pt.yscale('log')
 
-        pt.sca(axs[2,int(do_log)])
-        pt.plot(extr_curve, 'k-')
-        pt.plot([0, len(extr_curve)], [eps, eps], 'k:')
-        pt.ylabel("Constraint Slack")
-        if do_log: pt.yscale('log')
+    #     pt.sca(axs[2,int(do_log)])
+    #     pt.plot(extr_curve, 'k-')
+    #     pt.plot([0, len(extr_curve)], [eps, eps], 'k:')
+    #     pt.ylabel("Constraint Slack")
+    #     if do_log: pt.yscale('log')
 
-        pt.sca(axs[3,int(do_log)])
-        pt.plot(gn_curve, 'k:')
-        pt.plot(pgn_curve, 'k-')
-        pt.ylabel("Grad Norm")
-        if do_log: pt.yscale('log')
-        pt.xlabel("Optimization Step")
-    pt.tight_layout()
-    pt.savefig(f"sq_ccg_ltm_{N}.pdf")
-    pt.show()
+    #     pt.sca(axs[3,int(do_log)])
+    #     pt.plot(gn_curve, 'k:')
+    #     pt.plot(pgn_curve, 'k-')
+    #     pt.ylabel("Grad Norm")
+    #     if do_log: pt.yscale('log')
+    #     pt.xlabel("Optimization Step")
+    # pt.tight_layout()
+    # pt.savefig(f"sq_ccg_ltm_{N}.pdf")
+    # pt.show()
 
 
 if __name__ == "__main__": main()

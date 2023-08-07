@@ -20,7 +20,7 @@ def adjacency(Y, sym=True):
 
 if __name__ == "__main__":
 
-    N = 5
+    N = 4
     ltms = np.load(f"ltms_{N}.npz")
     Y, W, X = ltms["Y"], ltms["W"], ltms["X"]
 
