@@ -43,7 +43,7 @@ class SoftForm(tr.nn.Module):
         self.z = tr.zeros(B,N) # placeholder for non-existent children
 
     def reset_dims(self, B, N):
-        self.z = tr.zeros(B,N) # placeholder for non-existent children
+        self.z = tr.zeros(B, N) # placeholder for non-existent children
 
     # batched inputs[v][b,:]: ND vector for variable v in example b
     def forward(self, inputs):
@@ -69,10 +69,22 @@ class SoftForm(tr.nn.Module):
     
             # binary functions
             for op in self.ops[2]: nv.append(op(values.get(nl, self.z), values.get(nr, self.z)))
-    
+
+            # if tr.isnan(tr.stack(nv)).any():
+            #     print(n, attention.shape[0])
+            #     for o,op in enumerate(self.ops[0]+self.ops[1]+self.ops[2]):
+            #         print(op, nv[o])
+            #     print(attention)
+            #     input('.')
+
             # weighted average (ops,B,N) -> (B,N)
             values[n] = (attention[n].view(-1,1,1) * tr.stack(nv)).sum(dim=0)
-    
+
+            # if tr.isnan(values[n]).any():
+            #     print(n, attention.shape[0], values[n])
+            #     print(attention)
+            #     input('.')
+
         return values[0]
 
     """
