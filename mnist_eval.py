@@ -80,6 +80,7 @@ if __name__ == "__main__":
 
     model = tr.load('softfit.pt')
     print("form", form_str(model.alpha.harden()), form_str(model.beta.harden()))
+    print(tr.isnan(model.alpha.attention).any() or tr.isnan(model.beta.attention).any())
 
     def soft_rule(w, x, y, N):
         inputs = {

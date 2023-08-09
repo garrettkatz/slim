@@ -1,7 +1,7 @@
 import pickle as pk
 import numpy as np
 import torch as tr
-from softform import SoftForm, form_str, dot, inv, square
+from softform import SoftForm, form_str, dotmean, inv, square
 from svm_data import random_transitions
 from svm_eval import svm_eval
 
@@ -32,7 +32,20 @@ class SpanRule(tr.nn.Module):
         alpha = self.alpha(inputs)
         beta = self.beta(inputs)
         w_pred = alpha * inputs['w'] + beta * inputs['x'] # allows vector, element-wise coefficients
+        if tr.isnan(w_pred).any():
+            if tr.isnan(alpha).any(): print('alpha')
+            elif tr.isnan(beta).any(): print('beta')
+            elif tr.isnan(inputs["w"]).any(): print('inputs["w"]')
+            elif tr.isnan(inputs["x"]).any(): print('inputs["x"]')
+            else:
+                print("alpha", alpha)
+                print("inputs['w']", inputs['w'])
+                print("beta", beta)
+                print("inputs['x']", inputs['x'])
+            input('um.')
         w_pred = tr.nn.functional.normalize(w_pred)
+        if tr.isnan(w_pred).any():
+            input('arg.')
 
         return w_pred
 
@@ -48,12 +61,12 @@ if __name__ == "__main__":
 
     ops = {
         0: ['w', 'x', 'y', '1'], # large N makes overflows, normalizing and no inv anyway
-        1: [tr.neg, tr.sign, square],
-        2: [tr.add, tr.mul, tr.maximum, tr.minimum, dot],
+        1: [tr.neg, tr.sign, square]
+        2: [tr.add, tr.sub, tr.mul, tr.maximum, tr.minimum, dotmean],
     }
 
     B = 16
-    max_depth = 8
+    max_depth = 7
     use_ham = False
 
     do_train = True
@@ -72,7 +85,6 @@ if __name__ == "__main__":
     # num_runs = 1000
 
     model = SpanRule(ops, max_depth, B, Ns[0], use_ham)
-    cossim = tr.nn.CosineSimilarity()
     opt = tr.optim.Adam(model.parameters(), lr=lr)
 
     init_attn = model.beta.attention.detach().clone().numpy()

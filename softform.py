@@ -16,6 +16,10 @@ def form_eval(node, inputs):
 def dot(x, y):
     return tr.bmm(x.unsqueeze(1), y.unsqueeze(2)).view(-1,1).expand(*x.shape)
 
+# more stable for large N
+def dotmean(x, y):
+    return tr.bmm(x.unsqueeze(1), y.unsqueeze(2)).view(-1,1).expand(*x.shape) / x.shape[1]
+
 def inv(x):
     return tr.where(x == 0., 0., 1./x) # even if you define 1/x = 0 at x = 0, still not differentiable
 
@@ -70,20 +74,20 @@ class SoftForm(tr.nn.Module):
             # binary functions
             for op in self.ops[2]: nv.append(op(values.get(nl, self.z), values.get(nr, self.z)))
 
-            # if tr.isnan(tr.stack(nv)).any():
-            #     print(n, attention.shape[0])
-            #     for o,op in enumerate(self.ops[0]+self.ops[1]+self.ops[2]):
-            #         print(op, nv[o])
-            #     print(attention)
-            #     input('.')
+            if tr.isnan(tr.stack(nv)).any() or tr.isinf(tr.stack(nv)).any():
+                print(n, attention.shape)
+                for o,op in enumerate(self.ops[0]+self.ops[1]+self.ops[2]):
+                    print(op, attention[n, o], nv[o])
+                print(attention)
+                input('why.')
 
             # weighted average (ops,B,N) -> (B,N)
             values[n] = (attention[n].view(-1,1,1) * tr.stack(nv)).sum(dim=0)
 
-            # if tr.isnan(values[n]).any():
-            #     print(n, attention.shape[0], values[n])
-            #     print(attention)
-            #     input('.')
+            if tr.isnan(values[n]).any() or tr.isinf(values[n]).any():
+                print(n, attention.shape[0], values[n])
+                print(attention)
+                input('how.')
 
         return values[0]
 
