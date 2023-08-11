@@ -1,103 +1,142 @@
 import os
+import pickle as pk
 import numpy as np
+from scipy.stats import ttest_1samp
 import matplotlib.pyplot as pt
 from sklearn.svm import LinearSVC
 import torch as tr
 import torchvision as tv
 from torchvision.transforms import ToTensor
-from softfit import SpanRule, form_str
+from softform import form_str
+from softfit import VecRule
+
+# assumes at least num examples with specified classes in dataset
+def get_class_examples(dataset, classes, num):
+    count = 0
+    for i in np.random.permutation(len(dataset)):
+        x, y = dataset[i]
+        if y not in classes: continue
+        yield x, y
+        count += 1
+        if count == num: break
 
 if __name__ == "__main__":
+
+    do_eval = False
+    N = 28**2 # MNIST is 1x28x28 images
+    num_examples = {"train": 100, "test": 100}
+    num_reps = 30
 
     # define function for perceptron learning rule
     def perceptron_rule(w, x, y, N):
         return w + (y - np.sign(w @ x)) * x
 
-    train = tv.datasets.MNIST(
-        root = os.path.join(os.environ["HOME"], "Downloads"),
-        train = True,
-        transform = tv.transforms.ToTensor(),
-        download = True)
+    datasets = {}
+    for train in (False, True):
+        key = ["test", "train"][train]
+        datasets[key] = tv.datasets.MNIST(
+            root = os.path.join(os.environ["HOME"], "Downloads"),
+            train = train,
+            transform = tv.transforms.ToTensor(),
+            download = True)
 
-    test = tv.datasets.MNIST(
-        root = os.path.join(os.environ["HOME"], "Downloads"),
-        train = False,
-        transform = tv.transforms.ToTensor(),
-        download = True)
+    if do_eval:
 
-    N = 28**2 # MNIST is 1x28x28 images
-    classes = (1, 2)
-    max_examples = 100#15000
+        accs = {(key,mod): np.empty(num_reps) for key in ("train","test") for mod in ("svm", "perceptron", "soft")}
+        for rep in range(num_reps):
+    
+            classes = tuple(np.random.choice(10, size=2, replace=False))
+            print(f"{rep} of {num_reps}: classes:", classes)
+        
+            X, Y = {}, {}
+            for key in ["train", "test"]:
+                X[key] = np.empty((num_examples[key], N), dtype=int)
+                Y[key] = np.empty(num_examples[key], dtype=int)
+                for n, (x, y) in enumerate(get_class_examples(datasets[key], classes, num_examples[key])):
+                    x = x.flatten().numpy()
+                    X[key][n] = (x > (x.max() + x.min())/2).astype(int)
+                    Y[key][n] = (-1)**int(y == classes[0])
+        
+            # ##### SVC
+        
+            svc = LinearSVC(dual='auto', fit_intercept=False)
+            svc.fit(X['train'], Y['train'])
+            for key in ["train", "test"]:
+                pred = svc.predict(X[key])
+                svm_acc = (pred == Y[key]).mean()
+                print(f"svm {key} acc = {svm_acc}")
+                accs[(key,"svm")][rep] = svm_acc
+        
+            # ##### perceptron
+        
+            w = np.zeros(N)
+            for x, y in zip(X['train'], Y['train']):
+                w = perceptron_rule(w, x, y, N)
+            for key in ["train", "test"]:
+                pred = np.sign(X[key] @ w)
+                perceptron_acc = (pred == Y[key]).mean()
+                print(f"perceptron {key} acc = {perceptron_acc}")
+                accs[(key,"perceptron")][rep] = perceptron_acc
+        
+            # pt.imshow(w.reshape(28,28))
+            # pt.show()
+        
+            # ##### soft
+        
+            model = tr.load('nologit/softfit_10.pt') # best index from softfit eval (no logit)
+            # model = tr.load('logit/softfit_19.pt') # best index from softfit eval (logit)
+            print("form", form_str(model.sf.harden()))
+        
+            def soft_rule(w, x, y, N):
+                inputs = {
+                    'w': tr.nn.functional.normalize(tr.tensor(w, dtype=tr.float32).view(1,N)),
+                    'x': tr.tensor(x, dtype=tr.float32).view(1,N),
+                    'y': tr.tensor(y, dtype=tr.float32).view(1,1).expand(1, N), # broadcast
+                    '1': tr.ones(1,N), # broadcast
+                }
+                with tr.no_grad():
+                    w_new = model(inputs)
+                return w_new.clone().squeeze().numpy()
+        
+            w = np.zeros(N)
+            for i, (x, y) in enumerate(zip(X['train'], Y['train'])):
+                w = soft_rule(w, x, y, N)
+                # if i % 10 == 0: print(f"soft {i}", np.fabs(w).max())
+                # print(f"soft {i}", np.fabs(w).max())
+        
+            for key in ["train", "test"]:
+                pred = np.sign(X[key] @ w)
+                soft_acc = (pred == Y[key]).mean()
+                print(f"soft {key} acc = {soft_acc}")
+                accs[(key,"soft")][rep] = soft_acc
 
-    num_examples = 0
-    for i in range(len(train)):
-        x, y = train[i]
-        if y in classes: num_examples += 1
-        if num_examples == max_examples: break
-    print(num_examples)
+        with open("mnist_eval.pkl","wb") as f:
+            pk.dump(accs, f)
 
-    X = np.empty((num_examples, N), dtype=int)
-    Y = np.empty(num_examples, dtype=int)
-    n = 0
-    for i in range(len(train)):
-        x, y = train[i]
-        if y not in classes: continue
+    with open("mnist_eval.pkl","rb") as f:
+        accs = pk.load(f)
 
-        x = x.flatten().numpy()
-        X[n] = (x > (x.max() + x.min())/2).astype(int)
-        Y[n] = (-1)**int(y == classes[0])
+    result = ttest_1samp(accs['test','soft'], 0.5, alternative='greater')
+    print(f"stat={result.statistic}, pval={result.pvalue}")
 
-        n += 1
-        if n == num_examples: break
-
-    print(X.shape, Y.shape)
-
-    # random shuffle
-    idx = np.random.permutation(X.shape[0])
-    X, Y = X[idx], Y[idx]
-
-    # ##### SVC
-
-    svc = LinearSVC(dual='auto', fit_intercept=False)
-    svc.fit(X, Y)
-    pred = svc.predict(X)
-    svm_acc = (pred == Y).mean()
-    print(f"svm train acc = {svm_acc}")
-
-    # ##### perceptron
-
-    w = np.zeros(N)
-    for x, y in zip(X, Y):
-        w = perceptron_rule(w, x, y, N)
-    pred = np.sign(X @ w)
-    plr_acc = (pred == Y).mean()
-    print(f"plr train acc = {plr_acc}")
-
-    # pt.imshow(w.reshape(28,28))
+    # pt.plot([0]*num_reps, accs[('train','soft')], 'r.')
+    # pt.plot([1]*num_reps, accs[('test','soft')], 'b.')
+    # pt.scatter(0, np.mean(accs[('train','soft')]), 50, color='r')
+    # pt.scatter(1, np.mean(accs[('test','soft')]), 50, color='b')
+    # pt.scatter(0, np.mean(accs[('train','soft')]) - np.std(accs[('train','soft')]), 50, color='r')
+    # pt.scatter(1, np.mean(accs[('test','soft')]) - np.std(accs[('test','soft')]), 50, color='b')
+    # pt.plot([0,1],[.5,.5], 'k:')
+    # pt.xticks([0,1], ['train','test'], rotation=90)
     # pt.show()
 
-    # ##### soft
+    pt.figure(figsize=(4,3))
+    pt.hist(accs[('train','soft')], bins = np.linspace(0, 1.0, 10), align='left', rwidth=0.5, label="Train")
+    pt.hist(accs[('test','soft')], bins = np.linspace(0, 1.0, 10), align='mid', rwidth=0.5, label="Test")
+    # pt.xlim([.3, 1.0])
+    pt.xlabel("Accuracy")
+    pt.ylabel("Frequency")
+    pt.legend()
+    pt.tight_layout()
+    pt.savefig("mnist.pdf")
+    pt.show()
 
-    model = tr.load('softfit.pt')
-    print("form", form_str(model.alpha.harden()), form_str(model.beta.harden()))
-    print(tr.isnan(model.alpha.attention).any() or tr.isnan(model.beta.attention).any())
-
-    def soft_rule(w, x, y, N):
-        inputs = {
-            'w': tr.nn.functional.normalize(tr.tensor(w, dtype=tr.float32).view(1,N)),
-            'x': tr.tensor(x, dtype=tr.float32).view(1,N),
-            'y': tr.tensor(y, dtype=tr.float32).view(1,1).expand(1, N), # broadcast
-            '1': tr.ones(1,N), # broadcast
-        }
-        with tr.no_grad():
-            w_new = model(inputs)
-        return w_new.clone().squeeze().numpy()
-
-    w = np.zeros(N)
-    for i, (x, y) in enumerate(zip(X, Y)):
-        w = soft_rule(w, x, y, N)
-        # if i % 10 == 0: print(f"soft {i}", np.fabs(w).max())
-        print(f"soft {i}", np.fabs(w).max())
-    pred = np.sign(X @ w)
-    sft_acc = (pred == Y).mean()
-    print(f"sft train acc = {sft_acc}")

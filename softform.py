@@ -12,13 +12,28 @@ def form_eval(node, inputs):
     else: return op(*[form_eval(a, inputs) for a in args])   
 
 # re-broadcasting dot-product
-# assume x, y are BxN
+# assume x, y are shape (... x B x N)
 def dot(x, y):
-    return tr.bmm(x.unsqueeze(1), y.unsqueeze(2)).view(-1,1).expand(*x.shape)
+    return (x*y).sum(dim=-1, keepdims=True).expand(*x.shape)
 
 # more stable for large N
 def dotmean(x, y):
-    return tr.bmm(x.unsqueeze(1), y.unsqueeze(2)).view(-1,1).expand(*x.shape) / x.shape[1]
+    return (x*y).mean(dim=-1, keepdims=True).expand(*x.shape)
+
+def project(x, y):
+    return dotmean(x, y) * y
+
+def reject(x, y):
+    return x * dotmean(y, y) - dotmean(x, y) * y
+
+def min(x):
+    return x.min(dim=-1, keepdims=True)[0].expand(*x.shape)
+
+def max(x):
+    return x.max(dim=-1, keepdims=True)[0].expand(*x.shape)
+
+def mean(x):
+    return x.mean(dim=-1, keepdims=True)[0].expand(*x.shape)
 
 def inv(x):
     return tr.where(x == 0., 0., 1./x) # even if you define 1/x = 0 at x = 0, still not differentiable
@@ -33,15 +48,15 @@ class SoftForm(tr.nn.Module):
 
     # operations[k]: list of k-ary function handles
     # B: batch size
-    def __init__(self, operations, max_depth, B, N):
+    def __init__(self, operations, max_depth, B, N, logits=True):
         super().__init__()
 
+        self.max_depth = max_depth
         self.ops = operations
+        self.logits = logits
 
         num_nodes = 2**(max_depth+1) - 1
         num_ops = sum(map(len, operations.values()))
-        # self.attention = tr.nn.Parameter(tr.softmax(0.01*tr.randn(num_nodes, num_ops), dim=1))
-        # self.attention = tr.nn.Parameter(tr.ones(num_nodes, num_ops) / num_ops)
         self.attention = tr.nn.Parameter(0.01*tr.randn(num_nodes, num_ops))
 
         self.z = tr.zeros(B,N) # placeholder for non-existent children
@@ -52,44 +67,37 @@ class SoftForm(tr.nn.Module):
     # batched inputs[v][b,:]: ND vector for variable v in example b
     def forward(self, inputs):
 
-        attention = self.attention # average weights
-        # attention = tr.softmax(self.attention, dim=1) # logits
+        if self.logits:
+            attention = tr.softmax(self.attention, dim=1)
+        else:
+            attention = self.attention # average weights
 
-        # process node values from leaves to root
-        values = {}
-        for n in reversed(range(attention.shape[0])):
-    
-            # left/right children
-            nl, nr = 2*n + 1, 2*n + 2
-    
-            # accumulate values for weighted average
-            nv = []
-    
-            # constants
-            for op in self.ops[0]: nv.append(inputs[op])
-    
-            # unary functions
-            for op in self.ops[1]: nv.append(op(values.get(nl, self.z)))
-    
-            # binary functions
-            for op in self.ops[2]: nv.append(op(values.get(nl, self.z), values.get(nr, self.z)))
+        # process nodes by layer, deep to shallow
 
-            if tr.isnan(tr.stack(nv)).any() or tr.isinf(tr.stack(nv)).any():
-                print(n, attention.shape)
-                for o,op in enumerate(self.ops[0]+self.ops[1]+self.ops[2]):
-                    print(op, attention[n, o], nv[o])
-                print(attention)
-                input('why.')
+        # constants
+        constants = []
+        for op in self.ops[0]: constants.append(inputs[op])
+        C = len(constants)
+        constants = tr.stack(constants) # C x B x N
 
-            # weighted average (ops,B,N) -> (B,N)
-            values[n] = (attention[n].view(-1,1,1) * tr.stack(nv)).sum(dim=0)
+        # leaves
+        attn = attention[2**self.max_depth-1:] # nodes x ops
+        values = (attn[:,:C,None,None] * constants).sum(dim=1) # nodes x B x N
 
-            if tr.isnan(values[n]).any() or tr.isinf(values[n]).any():
-                print(n, attention.shape[0], values[n])
-                print(attention)
-                input('how.')
+        for depth in reversed(range(self.max_depth)):
 
-        return values[0]
+            left, right = values[::2], values[1::2] # nodes x B x N
+            unary = [op(left) for op in self.ops[1]] # ops1 x nodes x B x N
+            binary = [op(left, right) for op in self.ops[2]] # ops2 x nodes x B x N
+            results = tr.stack(unary + binary) # ops1+2 x nodes x B x N
+
+            attn = attention[2**depth-1:2**(depth+1)-1] # nodes x ops
+            values = (attn[:,:C,None,None] * constants).sum(dim=1) # nodes x B x N
+
+            values = values + (attn.t()[C:,:,None,None] * results).sum(dim=0) # nodes x B x N
+
+        return values[0] # B x N
+
 
     """
     return formula tree for most attended ops
@@ -139,7 +147,7 @@ if __name__ == "__main__":
     max_depth = 6
     B, N = 2, 4
 
-    sf = SoftForm(ops, max_depth, B, N)
+    sf = SoftForm(ops, max_depth, B, N, logits=False)
 
     sf.attention.data[:] = 0
     sf.attention.data[  0, 9] = 1 # add(
