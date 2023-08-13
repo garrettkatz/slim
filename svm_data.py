@@ -2,16 +2,18 @@ import itertools as it
 import numpy as np
 from sklearn.svm import LinearSVC
 
-def random_transitions(X, Y, N, B):
+def random_transitions(X, Y, N, B, rng=None):
+
+    if rng == None: rng = np.random.default_rng()
 
     w_new, w_old, x = tuple(np.empty((B, N)) for _ in range(3))
     y = np.empty(B)
     for b in range(B):
 
         # randomly sample training data
-        i = np.random.choice(Y[N].shape[0]) # dichotomy
-        t = np.random.choice(Y[N].shape[1])+1 # time-step
-        K = np.random.choice(Y[N].shape[1], size=t, replace=False) # example indices
+        i = rng.choice(Y[N].shape[0]) # dichotomy
+        t = rng.choice(Y[N].shape[1])+1 # time-step
+        K = rng.choice(Y[N].shape[1], size=t, replace=False) # example indices
 
         # most recent example
         k_new, k_old = K[0], K[1:]
@@ -45,7 +47,7 @@ def all_transitions(X, Y, N, T=None):
     w = {}
     w_new, w_old, x, y = [], [], [], []
     for i in range(Y[N].shape[0]):
-        w[i] = {(): np.zeros(N)}
+        w[i] = {(): np.zeros((1,N))}
         for t in range(1, T+1):
             for K in it.combinations(range(Y[N].shape[1]), t):
 
@@ -77,20 +79,22 @@ if __name__ == "__main__":
         ltms = np.load(fname)
         X[N], Y[N] = ltms["X"], ltms["Y"]
 
-    # N = 5
-    # T = 4 #2**(N-1)
+    for N in range(3,5):
+        for T in range(1, 2**(N-1)+1):
+            w_new, w_old, x, y = all_transitions(X, Y, N, T)
+            print(f"{N},{T} of {2**(N-1)}: {len(w_new)} transitions total")
 
-    N = 4
-    T = 2**(N-1)
-    B = 10
+    # N = 4
+    # T = 2**(N-1)
+    # B = 10
 
-    w_new, w_old, x, y = all_transitions(X, Y, N, T)
-    print(len(w_new))
+    # w_new, w_old, x, y = all_transitions(X, Y, N, T)
+    # print(f"{len(w_new)} transitions total")
 
-    w_new, w_old, x, y = random_transitions(X, Y, N, B)
-    print(len(w_new))
+    # w_new, w_old, x, y = random_transitions(X, Y, N, B)
+    # print(len(w_new))
 
-    print(w_new)
-    print(x)
-    print(y)
+    # print(w_new)
+    # print(x)
+    # print(y)
 

@@ -7,8 +7,8 @@ from sklearn.svm import LinearSVC
 import torch as tr
 import torchvision as tv
 from torchvision.transforms import ToTensor
-from softform import form_str
-from softfit import VecRule
+from softform import form_str, form_eval
+from softfit_dense import VecRule
 
 # assumes at least num examples with specified classes in dataset
 def get_class_examples(dataset, classes, num):
@@ -25,7 +25,7 @@ if __name__ == "__main__":
     do_eval = True
     N = 28**2 # MNIST is 1x28x28 images
     num_examples = {"train": 100, "test": 100}
-    num_reps = 30
+    num_reps = 10
 
     # define function for perceptron learning rule
     def perceptron_rule(w, x, y, N):
@@ -54,7 +54,7 @@ if __name__ == "__main__":
                 Y[key] = np.empty(num_examples[key], dtype=int)
                 for n, (x, y) in enumerate(get_class_examples(datasets[key], classes, num_examples[key])):
                     x = x.flatten().numpy()
-                    # X[key][n] = (-1)**(x < (x.max() + x.min())/2).astype(int) # why does this work worse?
+                    # X[key][n] = (-1)**(x < (x.max() + x.min())/2).astype(int)
                     X[key][n] = (x > (x.max() + x.min())/2).astype(int)
                     Y[key][n] = (-1)**int(y == classes[0])
         
@@ -84,20 +84,29 @@ if __name__ == "__main__":
         
             # ##### soft
         
-            model = tr.load('nologit/softfit_10.pt') # best index from softfit eval (no logit)
-            # model = tr.load('logit/softfit_19.pt') # best index from softfit eval (logit)
-            print("form", form_str(model.sf.harden()))
+            model = tr.load('sfd_0.pt') # best index from softfit dense eval
+            form = model.sf.harden()
+            print("form", form_str(form))
         
             def soft_rule(w, x, y, N):
-                inputs = {
-                    'w': tr.nn.functional.normalize(tr.tensor(w, dtype=tr.float32).view(1,N)),
-                    'x': tr.tensor(x, dtype=tr.float32).view(1,N),
-                    'y': tr.tensor(y, dtype=tr.float32).view(1,1).expand(1, N), # broadcast
-                    '1': tr.ones(1,N), # broadcast
-                }
+                inputs = tr.stack([
+                    tr.nn.functional.normalize(tr.tensor(w, dtype=tr.float32).view(1,N)), # w
+                    tr.tensor(x, dtype=tr.float32).view(1,N), # x
+                    tr.tensor(y, dtype=tr.float32).view(1,1).expand(1, N), # y
+                    tr.ones(1,N), # 1
+                ])
                 with tr.no_grad():
                     w_new = model(inputs)
                 return w_new.clone().squeeze().numpy()
+
+                # inputs = {
+                #     'w': tr.nn.functional.normalize(tr.tensor(w, dtype=tr.float32).view(1,N)),
+                #     'x': tr.tensor(x, dtype=tr.float32).view(1,N),
+                #     'y': tr.tensor(y, dtype=tr.float32).view(1,1).expand(1, N),
+                #     '1': tr.ones(1,N),
+                # }
+                # w_new = tr.nn.functional.normalize(form_eval(form, inputs))
+                # return w_new.clone().squeeze().numpy()
         
             w = np.zeros(N)
             for i, (x, y) in enumerate(zip(X['train'], Y['train'])):
@@ -111,10 +120,10 @@ if __name__ == "__main__":
                 print(f"soft {key} acc = {soft_acc}")
                 accs[(key,"soft")][rep] = soft_acc
 
-        with open("mnist_eval.pkl","wb") as f:
+        with open("mnist_eval_dense.pkl","wb") as f:
             pk.dump(accs, f)
 
-    with open("mnist_eval.pkl","rb") as f:
+    with open("mnist_eval_dense.pkl","rb") as f:
         accs = pk.load(f)
 
     result = ttest_1samp(accs['test','soft'], 0.5, alternative='greater')
@@ -131,13 +140,15 @@ if __name__ == "__main__":
     # pt.show()
 
     pt.figure(figsize=(4,3))
-    pt.hist(accs[('train','soft')], bins = np.linspace(0, 1.0, 10), align='left', rwidth=0.5, label="Train")
-    pt.hist(accs[('test','soft')], bins = np.linspace(0, 1.0, 10), align='mid', rwidth=0.5, label="Test")
-    # pt.xlim([.3, 1.0])
+    # pt.hist(accs[('train','soft')], bins = np.linspace(0, 1.0, 10), align='left', rwidth=0.5, label="Train")
+    # pt.hist(accs[('test','soft')], bins = np.linspace(0, 1.0, 10), align='mid', rwidth=0.5, label="Test")
+    # # pt.xlim([.3, 1.0])
+    pt.hist(accs[('train','soft')], align='left', rwidth=0.5, label="Train")
+    pt.hist(accs[('test','soft')], align='mid', rwidth=0.5, label="Test")
     pt.xlabel("Accuracy")
     pt.ylabel("Frequency")
     pt.legend()
     pt.tight_layout()
-    pt.savefig("mnist.pdf")
+    pt.savefig("mnist_dense.pdf")
     pt.show()
 
