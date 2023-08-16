@@ -1,6 +1,20 @@
 import torch as tr
 import softform as sf
 
+# printing
+def form_str(node):
+    op, args = node
+
+    if type(op) == str:
+        return op
+
+    if op.__name__[-4:] == "left":
+        return f"{op.__name__[:-4]}({form_str(args[0])})"
+    if op.__name__[-5:] == "right":
+        return f"{op.__name__[:-5]}({form_str(args[1])})"
+
+    return f"{op.__name__}({','.join(map(form_str, args))})"
+
 # unary ops
 def minleft(x, y):
     return x.min(dim=-1, keepdims=True)[0].expand(*x.shape)
@@ -26,8 +40,13 @@ def squareright(x, y): return y**2
 def negleft(x, y): return -x
 def negright(x, y): return -y
 
-def signleft(x, y): return tr.sign(x)
-def signright(x, y): return tr.sign(y)
+# straight-through gradients for sign function
+# based on https://discuss.pytorch.org/t/custom-binarization-layer-with-straight-through-estimator-gives-error/4539/4
+def softsign(x):
+    return x + tr.sign(x).detach() - x.detach() # sign(x) in forward and x in backward
+
+def signleft(x, y): return softsign(x)
+def signright(x, y): return softsign(y)
 
 def idleft(x, y): return x
 def idright(x, y): return y
@@ -42,7 +61,7 @@ class SoftFormDense(tr.nn.Module):
 
     # operations[k]: list of k-ary function handles
     # B: batch size
-    def __init__(self, max_depth, logits=True):
+    def __init__(self, max_depth, logits=True, init_scale=1.0):
         super().__init__()
 
         self.max_depth = max_depth
@@ -51,8 +70,8 @@ class SoftFormDense(tr.nn.Module):
         num_leaves = 2**max_depth
         num_inner = 2**max_depth - 1
 
-        self.inners_attn = tr.nn.Parameter(0.01*tr.randn(num_inner, len(OPS)))
-        self.leaves_attn = tr.nn.Parameter(0.01*tr.randn(num_leaves, 4)) # w, x, y, 1
+        self.inners_attn = tr.nn.Parameter(init_scale*tr.randn(num_inner, len(OPS)))
+        self.leaves_attn = tr.nn.Parameter(init_scale*tr.randn(num_leaves, 4)) # w, x, y, 1
 
     # batched inputs: 4 x B x N (4 inputs are w, x, y, 1)
     def forward(self, inputs):
@@ -147,7 +166,7 @@ if __name__ == "__main__":
     form = model.harden()
 
     print("perceptron?")
-    print(sf.form_str(form))
+    print(form_str(form))
     print("output? [0, -1, 3, 2]")
     print(v)
     print("grads:")

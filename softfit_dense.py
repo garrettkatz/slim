@@ -4,9 +4,9 @@ from multiprocessing import Pool
 import numpy as np
 import torch as tr
 import softform_dense as sfd
-from svm_data import random_transitions
+from svm_data import random_transitions, all_transitions
 from svm_eval import svm_eval
-from softform import form_str
+from noam import NoamScheduler
 
 class VecRule(tr.nn.Module):
     def __init__(self, max_depth, logits=True):
@@ -32,10 +32,12 @@ def do_training_run(rep):
     B = 16
     max_depth = 5
 
-    lr = 0.0005
+    lr = 0.0005 # no schedule
+
+    noam = NoamScheduler(base_lr=0.03, warmup=5000)
 
     # # quick test
-    # num_itrs = 20
+    # num_itrs = 100
 
     # # medium run
     # num_itrs = 5000
@@ -43,11 +45,23 @@ def do_training_run(rep):
     # big run
     num_itrs = 20000
 
-    X, Y = {}, {}
-    for N in Ns:
+    examples = []
+    for N in range(3,5):
+        # get all transitions
         fname = f"ltms_{N}_c.npz"
         ltms = np.load(fname)
-        X[N], Y[N] = ltms["X"], ltms["Y"]
+        W, X, Y = ltms["W"], {N: ltms["X"]}, {N: ltms["Y"]}
+        w_new, w_old, x, y = all_transitions(X, Y, N)
+
+        # package as tensors
+        w_new = tr.nn.functional.normalize(tr.tensor(np.concatenate(w_new, axis=0), dtype=tr.float32))
+        w_old = tr.nn.functional.normalize(tr.tensor(np.concatenate(w_old, axis=0), dtype=tr.float32))
+        x = tr.tensor(np.stack(x), dtype=tr.float32)
+        y = tr.tensor(y, dtype=tr.float32).view(-1,1).expand(*x.shape) # broadcast
+        _1 = tr.ones(*x.shape)
+
+        inputs = tr.stack([w_old, x, y, _1])
+        examples.append((inputs, w_new))
 
     model = VecRule(max_depth, logits=use_softmax)
     opt = tr.optim.Adam(model.parameters(), lr=lr)
@@ -57,27 +71,21 @@ def do_training_run(rep):
     losses, gns = [], []
     for itr in range(num_itrs):
 
-        # training batch
-        N = rng.choice(Ns)
-        w_new, w_old, x, y = random_transitions(X, Y, N, B, rng)
-        w_new = tr.nn.functional.normalize(tr.tensor(w_new, dtype=tr.float32))
+        # collect loss over transitions
+        total_loss = 0.
+        for (inputs, w_new) in examples:
+            w_pred = model(inputs)
+            loss = -(w_new*w_pred).sum(dim=1).mean() / len(examples) # already normalized
+            loss.backward()
+            total_loss += loss.item()
 
-        inputs = tr.stack([
-            tr.nn.functional.normalize(tr.tensor(w_old, dtype=tr.float32)), # w
-            tr.tensor(x, dtype=tr.float32), # x
-            tr.tensor(y, dtype=tr.float32).view(-1,1).expand(B, N), # y
-            tr.ones(B,N), # 1
-        ])
-
-        # backprop on negative cosine similarity
-        w_pred = model(inputs)
-        loss = -(w_new*w_pred).sum(dim=1).mean() # already normalized
-        loss.backward()
-        losses.append(loss.item())    
+        losses.append(total_loss)
 
         gn = tr.linalg.vector_norm(tr.nn.utils.parameters_to_vector(model.parameters()))
         gns.append(gn.item())
 
+        noam.apply_lr(opt)
+        noam.step()
         opt.step()
         opt.zero_grad()
 
@@ -87,16 +95,16 @@ def do_training_run(rep):
             else:
                 opt_attn = model.sf.inners_attn.detach().clone().numpy()
 
-            print(f"{rep}: {itr} of {num_itrs} N={N}", losses[-1], gns[-1], np.fabs(opt_attn).max().item(), form_str(model.sf.harden()))
+            print(f"{rep}: {itr} of {num_itrs}", losses[-1], gns[-1], np.fabs(opt_attn).max(axis=1).mean(), sfd.form_str(model.sf.harden()))
             tr.save(model, f'sfd_{rep}.pt')
             with open(f'sfd_{rep}_train.pkl', 'wb') as f:
                 pk.dump((losses, gns, init_attn, opt_attn), f)
 
 def do_evaluation(rep):
 
-    num_runs = 100
+    num_runs = 30#100
 
-    Ns = list(range(3,8))
+    Ns = list(range(3,5))
 
     X, Y = {"train": {}, "test": {}}, {"train": {}, "test": {}}
     for N in Ns:
