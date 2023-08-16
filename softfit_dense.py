@@ -6,12 +6,12 @@ import torch as tr
 import softform_dense as sfd
 from svm_data import random_transitions, all_transitions
 from svm_eval import svm_eval
-from noam import NoamScheduler
+from noam import NoamScheduler, NoScheduler
 
 class VecRule(tr.nn.Module):
-    def __init__(self, max_depth, logits=True):
+    def __init__(self, max_depth, logits=True, init_scale=None):
         super().__init__()
-        self.sf = sfd.SoftFormDense(max_depth, logits)
+        self.sf = sfd.SoftFormDense(max_depth, logits, init_scale)
 
     def forward(self, inputs):
         # apply soft formula and normalize
@@ -26,6 +26,7 @@ def do_training_run(rep):
     rng = np.random.default_rng()
 
     use_softmax = True
+    use_noam = True
 
     Ns = list(range(3,8))
 
@@ -34,7 +35,10 @@ def do_training_run(rep):
 
     lr = 0.0005 # no schedule
 
-    noam = NoamScheduler(base_lr=0.03, warmup=5000)
+    if use_noam:
+        sched = NoamScheduler(base_lr=0.03, warmup=5000)
+    else:
+        sched = NoScheduler()
 
     # # quick test
     # num_itrs = 100
@@ -63,7 +67,10 @@ def do_training_run(rep):
         inputs = tr.stack([w_old, x, y, _1])
         examples.append((inputs, w_new))
 
-    model = VecRule(max_depth, logits=use_softmax)
+    if use_noam:
+        model = VecRule(max_depth, logits=use_softmax)
+    else:
+        model = VecRule(max_depth, logits=use_softmax, init_scale = 0.01)
     opt = tr.optim.Adam(model.parameters(), lr=lr)
 
     init_attn = model.sf.inners_attn.detach().clone().numpy()
@@ -81,11 +88,20 @@ def do_training_run(rep):
 
         losses.append(total_loss)
 
+        if itr % 5000 == 0:
+            pt.subplot(1,3,1)
+            pt.imshow(init_attn)
+            pt.subplot(1,3,2)
+            pt.imshow(model.sf.inners_attn.detach().numpy())
+            pt.subplot(1,3,3)
+            pt.imshow(model.sf.leaves_attn.detach().numpy())
+            pt.show()
+
         gn = tr.linalg.vector_norm(tr.nn.utils.parameters_to_vector(model.parameters()))
         gns.append(gn.item())
 
-        noam.apply_lr(opt)
-        noam.step()
+        sched.apply_lr(opt)
+        sched.step()
         opt.step()
         opt.zero_grad()
 

@@ -1,5 +1,10 @@
 # based on https://nlp.seas.harvard.edu/2018/04/03/attention.html#optimizer
 
+class NoScheduler:
+    def __init__(self): pass
+    def step(self): pass
+    def apply_lr(self, optimizer): pass
+
 class NoamScheduler:
     def __init__(self, base_lr, warmup, step_num=0):
         self.base_lr = base_lr

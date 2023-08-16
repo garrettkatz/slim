@@ -61,8 +61,10 @@ class SoftFormDense(tr.nn.Module):
 
     # operations[k]: list of k-ary function handles
     # B: batch size
-    def __init__(self, max_depth, logits=True, init_scale=1.0):
+    def __init__(self, max_depth, logits=True, init_scale=None):
         super().__init__()
+
+        if init_scale == None: init_scale = 1.0
 
         self.max_depth = max_depth
         self.logits = logits
