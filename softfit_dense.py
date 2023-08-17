@@ -55,17 +55,22 @@ def do_training_run(rep):
         fname = f"ltms_{N}_c.npz"
         ltms = np.load(fname)
         W, X, Y = ltms["W"], {N: ltms["X"]}, {N: ltms["Y"]}
-        w_new, w_old, x, y = all_transitions(X, Y, N)
+        w_new, w_old, x, y, margins = all_transitions(X, Y, N)
 
         # package as tensors
-        w_new = tr.nn.functional.normalize(tr.tensor(np.concatenate(w_new, axis=0), dtype=tr.float32))
-        w_old = tr.nn.functional.normalize(tr.tensor(np.concatenate(w_old, axis=0), dtype=tr.float32))
+        w_new = tr.tensor(np.concatenate(w_new, axis=0), dtype=tr.float32)
+        w_old = tr.tensor(np.concatenate(w_old, axis=0), dtype=tr.float32)
         x = tr.tensor(np.stack(x), dtype=tr.float32)
         y = tr.tensor(y, dtype=tr.float32).view(-1,1).expand(*x.shape) # broadcast
         _1 = tr.ones(*x.shape)
+        margins = tr.tensor(np.stack(margins))
+        print('marg min, max', margins.min(), margins.max())
+        print('acos max', tr.acos(tr.clamp(margins, -1., 1.)).max())
+        mdenoms = 0.5*tr.pi - tr.acos(tr.clamp(margins, -1., 1.))
+        print('mdenoms min, max', mdenoms.min(), mdenoms.max())
 
         inputs = tr.stack([w_old, x, y, _1])
-        examples.append((inputs, w_new))
+        examples.append((inputs, (w_new, mdenoms)))
 
     if use_noam:
         model = VecRule(max_depth, logits=use_softmax)
@@ -80,9 +85,24 @@ def do_training_run(rep):
 
         # collect loss over transitions
         total_loss = 0.
-        for (inputs, w_new) in examples:
+        for (inputs, (w_new, mdenom)) in examples:
             w_pred = model(inputs)
-            loss = -(w_new*w_pred).sum(dim=1).mean() / len(examples) # already normalized
+
+            # # orig
+            # loss = -(w_new*w_pred).sum(dim=1).mean() / len(examples) # already normalized
+
+            # # angles, make nan grads maybe arccos(1)?
+            # gamma = tr.acos(tr.clamp((w_new*w_pred).sum(dim=1), -1., 1.)) # already normalized
+            # loss = (gamma / mdenom).mean() / len(examples)
+
+            # trigs
+            cosgam = (w_new*w_pred).sum(dim=1) # already normalized
+            sinthe = tr.cos(mdenom)
+            print('cosgam', cosgam)
+            print('sinthe', sinthe)
+            loss = -(cosgam / sinthe).mean() / len(examples)
+            print('loss',loss)
+
             loss.backward()
             total_loss += loss.item()
 
@@ -161,7 +181,7 @@ if __name__ == "__main__":
     do_eval = True
     do_show = True
     num_proc = 2
-    num_reps = 5
+    num_reps = 1
 
     if do_train:
         with Pool(processes=num_proc) as pool:

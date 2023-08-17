@@ -44,10 +44,11 @@ def all_transitions(X, Y, N, T=None):
 
     if T == None: T = 2**(N-1)
 
-    w = {}
-    w_new, w_old, x, y = [], [], [], []
+    w, m = {}, {}
+    w_new, w_old, x, y, margins = [], [], [], [], []
     for i in range(Y[N].shape[0]):
         w[i] = {(): np.zeros((1,N))}
+        m[i] = {}
         for t in range(1, T+1):
             for K in it.combinations(range(Y[N].shape[1]), t):
 
@@ -58,18 +59,27 @@ def all_transitions(X, Y, N, T=None):
                     np.concatenate((Y[N][i,K], -Y[N][i,K]), axis=0))
 
                 w[i][K] = svc.coef_
+                w[i][K] /= np.linalg.norm(w[i][K])
+                m[i][K] = np.fabs(w[i][K] @ X[N][:,K]).min() / N**.5 # cos theta(w,x)
+
+                # need special case handling here for t == 1, m[i][K] = 1.
+
+                # make sure it fits data
+                assert (np.sign(w[i][K] @ X[N][:,K]) == Y[N][i,K]).all()
 
         for t in range(T):
             for K in it.combinations(range(Y[N].shape[1]), t):
                 for k in range(Y[N].shape[1]):
                     if k in K: continue
+                    Kk = tuple(sorted(K + (k,)))
 
                     w_old.append(w[i][K])
                     x.append(X[N][:,k])
                     y.append(Y[N][i,k])
-                    w_new.append(w[i][tuple(sorted(K + (k,)))])
+                    w_new.append(w[i][Kk])
+                    margins.append(m[i][Kk])
 
-    return w_new, w_old, x, y
+    return w_new, w_old, x, y, margins
 
 if __name__ == "__main__":
 
