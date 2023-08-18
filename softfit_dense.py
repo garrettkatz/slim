@@ -36,7 +36,7 @@ def do_training_run(rep):
     lr = 0.0005 # no schedule
 
     if use_noam:
-        sched = NoamScheduler(base_lr=0.03, warmup=5000)
+        sched = NoamScheduler(base_lr=0.005, warmup=5000)
     else:
         sched = NoScheduler()
 
@@ -123,10 +123,11 @@ def do_training_run(rep):
         opt.zero_grad()
 
         if itr % 100 == 0 or itr+1 == num_itrs:
-            if use_softmax:
-                opt_attn = tr.softmax(model.sf.inners_attn.detach().clone(), dim=1).numpy()
-            else:
-                opt_attn = model.sf.inners_attn.detach().clone().numpy()
+            # if use_softmax:
+            #     opt_attn = tr.softmax(model.sf.inners_attn.detach().clone(), dim=1).numpy()
+            # else:
+            #     opt_attn = model.sf.inners_attn.detach().clone().numpy()
+            opt_attn = model.sf.inners_attn.detach().clone().numpy()
 
             print(f"{rep}: {itr} of {num_itrs} loss={total_loss} vs {total_perfection},", gns[-1], np.fabs(opt_attn).max(axis=1).mean(), sfd.form_str(model.sf.harden()))
             tr.save(model, f'sfd_{rep}.pt')
@@ -170,11 +171,11 @@ def do_evaluation(rep):
 
 if __name__ == "__main__":
 
-    do_train = False
-    do_eval = False
+    do_train = True
+    do_eval = True
     do_show = True
-    num_proc = 2
-    num_reps = 2
+    num_proc = 4
+    num_reps = 4
 
     if do_train:
         with Pool(processes=num_proc) as pool:
@@ -185,8 +186,6 @@ if __name__ == "__main__":
             pool.map(do_evaluation, range(num_reps))
 
     if do_show:
-
-        rep = 0
 
         all_losses, all_gns = [], []
         for rep in range(num_reps):
@@ -200,15 +199,21 @@ if __name__ == "__main__":
 
         pt.figure(figsize=(4,4))
 
-        pt.subplot(2,1,1)
-        all_losses -= all_losses.min() # if log scale
+        pt.subplot(3,1,1)
+        pt.plot(all_losses.T, '-', color=(.75,)*3)
+        pt.plot(all_losses.mean(axis=0), '-', color='k', label='mean')
+        pt.ylabel("Loss")
+        pt.legend()
+
+        pt.subplot(3,1,2)
+        all_losses -= all_losses.min() # for log scale
         pt.plot(all_losses.T, '-', color=(.75,)*3)
         pt.plot(all_losses.mean(axis=0), '-', color='k', label='mean')
         pt.ylabel("Loss")
         pt.yscale('log')
         pt.legend()
 
-        pt.subplot(2,1,2)
+        pt.subplot(3,1,3)
         pt.plot(all_gns.T, '-', color=(.75,)*3)
         pt.plot(all_gns.mean(axis=0), '-', color='k')
         pt.ylabel("Gradient Norm")
@@ -218,21 +223,17 @@ if __name__ == "__main__":
         pt.savefig('sfd_optimization.pdf')
         pt.show()
         
-        # pt.subplot(1,4,1)
-        # pt.plot(losses)
+        pt.subplot(1,2,1)
+        pt.imshow(init_attn)
+        pt.xticks(range(len(sfd.OPS)), [op if type(op) == str else op.__name__ for op in sfd.OPS], rotation=90)
+        pt.colorbar()
     
-        # pt.subplot(1,4,2)
-        # pt.plot(gns)
+        pt.subplot(1,2,2)
+        pt.imshow(opt_attn)
+        pt.xticks(range(len(sfd.OPS)), [op if type(op) == str else op.__name__ for op in sfd.OPS], rotation=90)
+        pt.colorbar()
     
-        # pt.subplot(1,4,3)
-        # pt.imshow(init_attn)
-        # pt.xticks(range(sum(map(len, sfd.OPS.values()))), [op if type(op) == str else op.__name__ for n in ops for op in ops[n]], rotation=90)
-    
-        # pt.subplot(1,4,4)
-        # pt.imshow(opt_attn)
-        # pt.xticks(range(sum(map(len, sfd.OPS.values()))), [op if type(op) == str else op.__name__ for n in ops for op in ops[n]], rotation=90)
-    
-        # pt.show()
+        pt.show()
 
         # eval metrics
         # accus = {'train': np.empty(num_reps), 'test': np.empty(num_reps)}
@@ -241,10 +242,10 @@ if __name__ == "__main__":
             with open(f'sfd_{rep}_eval.pkl', 'rb') as f:
                 (loss, accu) = pk.load(f)
             for key in accu.keys():
-                if len(accus) == 0: accus[key] = np.empty(num_reps)
+                if key not in accus: accus[key] = np.empty(num_reps)
                 accus[key][rep] = accu[key]
 
-        print(f"best rep: {np.argmax(accus['test'])}")
+        print(f"best rep: {np.argmax(accus[8])}")
 
         # pt.plot([0]*num_reps, accus['train'], 'r.')
         # pt.plot([1]*num_reps, accus['test'], 'b.')
@@ -259,11 +260,15 @@ if __name__ == "__main__":
         # pt.hist(accus['train'], bins = np.linspace(0, 1.0, 100), align='left', rwidth=0.5, label="N < 8")
         # pt.hist(accus['test'], bins = np.linspace(0, 1.0, 100), align='right', rwidth=0.5, label="N = 8")
         # pt.xlim([.8, 1.0])
+        # for key, vals in accus.items():
+        #     pt.hist(vals, label=f"N = {key}")
+        # pt.xlabel("Accuracy")
+        # pt.ylabel("Frequency")
+        # pt.legend()
         for key, vals in accus.items():
-            pt.hist(vals, label=f"N = {key}")
-        pt.xlabel("Accuracy")
-        pt.ylabel("Frequency")
-        pt.legend()
+            pt.plot([key]*len(vals), vals, 'k.')
+        pt.xlabel("N")
+        pt.ylabel("Accuracy")
         pt.tight_layout()
         pt.savefig("acc.pdf")
         pt.show()
