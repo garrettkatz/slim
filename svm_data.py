@@ -67,7 +67,8 @@ def all_transitions(X, Y, N, T=None):
                 # make sure it fits data
                 assert (np.sign(w[i][K] @ X[N][:,K]) == Y[N][i,K]).all()
 
-        for t in range(T):
+        # for t in range(T):
+        for t in range(1, T): # first step is prescribed (w = yx)
             for K in it.combinations(range(Y[N].shape[1]), t):
                 for k in range(Y[N].shape[1]):
                     if k in K: continue

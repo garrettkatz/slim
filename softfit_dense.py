@@ -47,7 +47,7 @@ def do_training_run(rep):
     # num_itrs = 5000
 
     # big run
-    num_itrs = 20000
+    num_itrs = 50000
 
     examples = []
     for N in range(3,5):
@@ -64,10 +64,7 @@ def do_training_run(rep):
         y = tr.tensor(y, dtype=tr.float32).view(-1,1).expand(*x.shape) # broadcast
         _1 = tr.ones(*x.shape)
         margins = tr.tensor(np.stack(margins))
-        print('marg min, max', margins.min(), margins.max())
-        print('acos max', tr.acos(tr.clamp(margins, -1., 1.)).max())
         mdenoms = 0.5*tr.pi - tr.acos(tr.clamp(margins, -1., 1.))
-        print('mdenoms min, max', mdenoms.min(), mdenoms.max())
 
         inputs = tr.stack([w_old, x, y, _1])
         examples.append((inputs, (w_new, mdenoms)))
@@ -85,6 +82,7 @@ def do_training_run(rep):
 
         # collect loss over transitions
         total_loss = 0.
+        total_perfection = 0.
         for (inputs, (w_new, mdenom)) in examples:
             w_pred = model(inputs)
 
@@ -98,24 +96,23 @@ def do_training_run(rep):
             # trigs
             cosgam = (w_new*w_pred).sum(dim=1) # already normalized
             sinthe = tr.cos(mdenom)
-            print('cosgam', cosgam)
-            print('sinthe', sinthe)
             loss = -(cosgam / sinthe).mean() / len(examples)
-            print('loss',loss)
+            perfection = -(1.0 / sinthe).mean() / len(examples)
 
             loss.backward()
             total_loss += loss.item()
+            total_perfection += perfection.item()
 
         losses.append(total_loss)
 
-        if itr % 5000 == 0:
-            pt.subplot(1,3,1)
-            pt.imshow(init_attn)
-            pt.subplot(1,3,2)
-            pt.imshow(model.sf.inners_attn.detach().numpy())
-            pt.subplot(1,3,3)
-            pt.imshow(model.sf.leaves_attn.detach().numpy())
-            pt.show()
+        # if itr % 5000 == 0:
+        #     pt.subplot(1,3,1)
+        #     pt.imshow(init_attn)
+        #     pt.subplot(1,3,2)
+        #     pt.imshow(model.sf.inners_attn.detach().numpy())
+        #     pt.subplot(1,3,3)
+        #     pt.imshow(model.sf.leaves_attn.detach().numpy())
+        #     pt.show()
 
         gn = tr.linalg.vector_norm(tr.nn.utils.parameters_to_vector(model.parameters()))
         gns.append(gn.item())
@@ -131,25 +128,21 @@ def do_training_run(rep):
             else:
                 opt_attn = model.sf.inners_attn.detach().clone().numpy()
 
-            print(f"{rep}: {itr} of {num_itrs}", losses[-1], gns[-1], np.fabs(opt_attn).max(axis=1).mean(), sfd.form_str(model.sf.harden()))
+            print(f"{rep}: {itr} of {num_itrs} loss={total_loss} vs {total_perfection},", gns[-1], np.fabs(opt_attn).max(axis=1).mean(), sfd.form_str(model.sf.harden()))
             tr.save(model, f'sfd_{rep}.pt')
             with open(f'sfd_{rep}_train.pkl', 'wb') as f:
                 pk.dump((losses, gns, init_attn, opt_attn), f)
 
 def do_evaluation(rep):
 
-    num_runs = 30#100
+    num_runs = 100
 
-    Ns = list(range(3,5))
-
-    X, Y = {"train": {}, "test": {}}, {"train": {}, "test": {}}
+    Ns = list(range(3,9))
+    X, Y = {}, {}
     for N in Ns:
         fname = f"ltms_{N}_c.npz"
         ltms = np.load(fname)
-        X['train'][N], Y['train'][N] = ltms["X"], ltms["Y"]
-
-    ltms = np.load("ltms_8_c.npz")
-    X['test'][8], Y['test'][8] = ltms["X"], ltms["Y"]
+        X[N], Y[N] = ltms["X"], ltms["Y"]
 
     model = tr.load(f'sfd_{rep}.pt')
 
@@ -166,22 +159,22 @@ def do_evaluation(rep):
         return w_new.clone().squeeze().numpy()
 
     loss, accu = {}, {}
-    for key in ('train', 'test'):
-        loss[key], accu[key] = svm_eval(X[key], Y[key], update_rule, num_runs)
-        accu[key] = np.mean(accu[key])
-        loss[key] = np.mean(loss[key] * 180/np.pi) # convert to degrees
-        print(f"{rep} svm {key} loss={loss[key]}, accu={accu[key]}")
+    for N in Ns:
+        loss[N], accu[N] = svm_eval({N: X[N]}, {N: Y[N]}, update_rule, num_runs)
+        accu[N] = np.mean(accu[N])
+        loss[N] = np.mean(loss[N] * 180/np.pi) # convert to degrees
+        print(f"{rep} svm {N} loss={loss[N]}, accu={accu[N]}")
 
     with open(f'sfd_{rep}_eval.pkl', 'wb') as f:
         pk.dump((loss, accu), f)
 
 if __name__ == "__main__":
 
-    do_train = True
-    do_eval = True
+    do_train = False
+    do_eval = False
     do_show = True
     num_proc = 2
-    num_reps = 1
+    num_reps = 2
 
     if do_train:
         with Pool(processes=num_proc) as pool:
@@ -208,9 +201,11 @@ if __name__ == "__main__":
         pt.figure(figsize=(4,4))
 
         pt.subplot(2,1,1)
+        all_losses -= all_losses.min() # if log scale
         pt.plot(all_losses.T, '-', color=(.75,)*3)
         pt.plot(all_losses.mean(axis=0), '-', color='k', label='mean')
-        pt.ylabel("Cosine Loss")
+        pt.ylabel("Loss")
+        pt.yscale('log')
         pt.legend()
 
         pt.subplot(2,1,2)
@@ -240,11 +235,13 @@ if __name__ == "__main__":
         # pt.show()
 
         # eval metrics
-        accus = {'train': np.empty(num_reps), 'test': np.empty(num_reps)}
+        # accus = {'train': np.empty(num_reps), 'test': np.empty(num_reps)}
+        accus = {}
         for rep in range(num_reps):
             with open(f'sfd_{rep}_eval.pkl', 'rb') as f:
-                (loss, accu)= pk.load(f)
-            for key in ('train', 'test'):
+                (loss, accu) = pk.load(f)
+            for key in accu.keys():
+                if len(accus) == 0: accus[key] = np.empty(num_reps)
                 accus[key][rep] = accu[key]
 
         print(f"best rep: {np.argmax(accus['test'])}")
@@ -262,8 +259,8 @@ if __name__ == "__main__":
         # pt.hist(accus['train'], bins = np.linspace(0, 1.0, 100), align='left', rwidth=0.5, label="N < 8")
         # pt.hist(accus['test'], bins = np.linspace(0, 1.0, 100), align='right', rwidth=0.5, label="N = 8")
         # pt.xlim([.8, 1.0])
-        pt.hist(accus['train'], label="N < 8")
-        pt.hist(accus['test'], label="N = 8")
+        for key, vals in accus.items():
+            pt.hist(vals, label=f"N = {key}")
         pt.xlabel("Accuracy")
         pt.ylabel("Frequency")
         pt.legend()
