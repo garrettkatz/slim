@@ -40,14 +40,14 @@ def do_training_run(rep):
     else:
         sched = NoScheduler()
 
-    # # quick test
-    # num_itrs = 100
+    # quick test
+    num_itrs = 100
 
-    # medium run
-    num_itrs = 5000
+    # # medium run
+    # num_itrs = 5000
 
-    # # big run
-    # num_itrs = 10000
+    # big run
+    num_itrs = 30000
 
     examples = []
     optimal_loss = 0.
@@ -174,7 +174,7 @@ def do_training_run(rep):
             opt_attn = model.sf.inners_attn.detach().clone().numpy()
 
             print(f"{rep}: {itr} of {num_itrs} loss={total_loss:.3f} vs {optimal_loss:.3f},",
-                  f"grad=clipped {clipped:.3f}, scaled~{gradscale:.3f} -> rms={gn:.3f}, ang={pang:.3f}),",
+                  f"grad=clipped {clipped:.3f}, scaled~{gradscale:.3f} -> rms={gn:.3f}, ang={pang:.3f},",
                   f"attn~{np.fabs(opt_attn).max(axis=1).mean():.3f}", sfd.form_str(model.sf.harden()))
             tr.save(model, f'sfd_{rep}.pt')
             with open(f'sfd_{rep}_train.pkl', 'wb') as f:
@@ -220,8 +220,8 @@ if __name__ == "__main__":
     do_train = True
     do_eval = True
     do_show = True
-    num_proc = 2
-    num_reps = 2
+    num_proc = 5
+    num_reps = 5
 
     if do_train:
         with Pool(processes=num_proc) as pool:
@@ -243,7 +243,7 @@ if __name__ == "__main__":
         all_losses = np.stack(all_losses)
         all_gns = np.stack(all_gns)
 
-        pt.figure(figsize=(4,4))
+        pt.figure(figsize=(12,8))
 
         pt.subplot(3,1,1)
         pt.plot(all_losses.T, '-', color=(.75,)*3)
@@ -268,7 +268,9 @@ if __name__ == "__main__":
         pt.tight_layout()
         pt.savefig('sfd_optimization.pdf')
         pt.show()
-        
+
+        pt.figure(figsize=(8,6))
+
         pt.subplot(1,2,1)
         pt.imshow(init_attn)
         pt.xticks(range(len(sfd.OPS)), [op if type(op) == str else op.__name__ for op in sfd.OPS], rotation=90)
@@ -278,7 +280,9 @@ if __name__ == "__main__":
         pt.imshow(opt_attn)
         pt.xticks(range(len(sfd.OPS)), [op if type(op) == str else op.__name__ for op in sfd.OPS], rotation=90)
         pt.colorbar()
-    
+
+        pt.tight_layout()
+        pt.savefig('sfd_attn.pdf')
         pt.show()
 
         # eval metrics
@@ -316,6 +320,6 @@ if __name__ == "__main__":
         pt.xlabel("N")
         pt.ylabel("Accuracy")
         pt.tight_layout()
-        pt.savefig("acc.pdf")
+        pt.savefig("sfd_acc.pdf")
         pt.show()
 
