@@ -25,9 +25,9 @@ class NoamScheduler:
 
 if __name__ == "__main__":
 
-    num_steps = 20000
-    base_lr = .03
-    warmup = 5000
+    num_steps = 5000
+    base_lr = 0.5
+    warmup = 500
 
     noam = NoamScheduler(base_lr, warmup)
 

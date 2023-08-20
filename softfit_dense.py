@@ -25,31 +25,32 @@ def do_training_run(rep):
     tr.manual_seed(tr.initial_seed() + 100*rep)
     rng = np.random.default_rng()
 
-    use_softmax = True
+    use_softmax = False
     use_noam = True
-
-    Ns = list(range(3,8))
+    use_simplex_clipping = True # don't use with softmax
 
     B = 16
     max_depth = 5
 
-    lr = 0.0005 # no schedule
+    lr = 0.1 # no schedule
 
     if use_noam:
-        sched = NoamScheduler(base_lr=0.005, warmup=5000)
+        # sched = NoamScheduler(base_lr=0.005, warmup=5000) # softmax
+        sched = NoamScheduler(base_lr=.5, warmup=500) # clipping
     else:
         sched = NoScheduler()
 
     # # quick test
     # num_itrs = 100
 
-    # # medium run
-    # num_itrs = 5000
+    # medium run
+    num_itrs = 5000
 
-    # big run
-    num_itrs = 50000
+    # # big run
+    # num_itrs = 10000
 
     examples = []
+    optimal_loss = 0.
     for N in range(3,5):
         # get all transitions
         fname = f"ltms_{N}_c.npz"
@@ -66,23 +67,37 @@ def do_training_run(rep):
         margins = tr.tensor(np.stack(margins))
         mdenoms = 0.5*tr.pi - tr.acos(tr.clamp(margins, -1., 1.))
 
+        # calculate optimal loss when all cosine sims are 1.0
+        sinmarg = tr.cos(mdenoms)
+        optimal_loss += -(1.0 / sinmarg).mean().item()
+
         inputs = tr.stack([w_old, x, y, _1])
         examples.append((inputs, (w_new, mdenoms)))
+
+    optimal_loss /= len(examples)
 
     if use_noam:
         model = VecRule(max_depth, logits=use_softmax)
     else:
         model = VecRule(max_depth, logits=use_softmax, init_scale = 0.01)
-    opt = tr.optim.Adam(model.parameters(), lr=lr)
+
+    if use_simplex_clipping:
+        # initialize weights within the attention simplices
+        for attn in (model.sf.inners_attn, model.sf.leaves_attn):
+            attn.data = attn.data.abs()
+            attn.data /= attn.data.sum(dim=1, keepdim=True)
+
+    # opt = tr.optim.Adam(model.parameters(), lr=lr)
+    opt = tr.optim.SGD(model.parameters(), lr=lr)
 
     init_attn = model.sf.inners_attn.detach().clone().numpy()
 
     losses, gns = [], []
+    last_gvec = None
     for itr in range(num_itrs):
 
         # collect loss over transitions
         total_loss = 0.
-        total_perfection = 0.
         for (inputs, (w_new, mdenom)) in examples:
             w_pred = model(inputs)
 
@@ -95,13 +110,11 @@ def do_training_run(rep):
 
             # trigs
             cosgam = (w_new*w_pred).sum(dim=1) # already normalized
-            sinthe = tr.cos(mdenom)
-            loss = -(cosgam / sinthe).mean() / len(examples)
-            perfection = -(1.0 / sinthe).mean() / len(examples)
+            sinmarg = tr.cos(mdenom)
+            loss = -(cosgam / sinmarg).mean() / len(examples)
 
             loss.backward()
             total_loss += loss.item()
-            total_perfection += perfection.item()
 
         losses.append(total_loss)
 
@@ -114,13 +127,44 @@ def do_training_run(rep):
         #     pt.imshow(model.sf.leaves_attn.detach().numpy())
         #     pt.show()
 
-        gn = tr.linalg.vector_norm(tr.nn.utils.parameters_to_vector(model.parameters()))
-        gns.append(gn.item())
+        if use_simplex_clipping:
+            clipped = []
+            gradscales = []
+            for attn in (model.sf.inners_attn, model.sf.leaves_attn):
+                # project away grad components orthogonal to attention simplices
+                attn.grad -= attn.grad.mean(dim=1, keepdim=True)
+                # clip grads to limits of attention simplices
+                minpos = tr.min(tr.where(attn.grad > 0, (1 - attn.data) / attn.grad, 1), dim=1, keepdim=True).values
+                minneg = tr.min(tr.where(attn.grad < 0, (  - attn.data) / attn.grad, 1), dim=1, keepdim=True).values
+                grad_scale = tr.minimum(tr.minimum(minpos, minneg), tr.ones(minpos.shape))
+                attn.grad *= grad_scale
+                clipped += (grad_scale != 1.).tolist()
+                gradscales += grad_scale.tolist()
+            clipped = np.mean(clipped)
+            gradscale = np.mean(gradscales)
+
+        gvec = tr.cat(tuple(attn.grad.data.flatten() for attn in (model.sf.inners_attn, model.sf.leaves_attn)), dim=0)
+        gn = ((gvec**2).mean()**.5).item()
+        gns.append(gn)
+
+        if last_gvec is None:
+            pang = 0.
+        else:
+            pang = tr.acos(tr.clamp(tr.nn.functional.cosine_similarity(gvec, last_gvec, dim=0), -1., 1.)).item() * 180 / tr.pi
+        last_gvec = gvec.clone().detach()
 
         sched.apply_lr(opt)
         sched.step()
         opt.step()
         opt.zero_grad()
+
+        if use_simplex_clipping:
+            # remove small round-off errors outside the simplex
+            for attn in (model.sf.inners_attn, model.sf.leaves_attn):
+                # if itr % 100 == 0:
+                #     print(attn.min(), attn.max(), attn.sum(dim=-1).min(), attn.sum(dim=-1).max())
+                attn.data = tr.clamp(attn.data, 0., 1.)
+                attn.data /= attn.data.sum(dim=1, keepdim=True)
 
         if itr % 100 == 0 or itr+1 == num_itrs:
             # if use_softmax:
@@ -129,10 +173,12 @@ def do_training_run(rep):
             #     opt_attn = model.sf.inners_attn.detach().clone().numpy()
             opt_attn = model.sf.inners_attn.detach().clone().numpy()
 
-            print(f"{rep}: {itr} of {num_itrs} loss={total_loss} vs {total_perfection},", gns[-1], np.fabs(opt_attn).max(axis=1).mean(), sfd.form_str(model.sf.harden()))
+            print(f"{rep}: {itr} of {num_itrs} loss={total_loss:.3f} vs {optimal_loss:.3f},",
+                  f"grad=clipped {clipped:.3f}, scaled~{gradscale:.3f} -> rms={gn:.3f}, ang={pang:.3f}),",
+                  f"attn~{np.fabs(opt_attn).max(axis=1).mean():.3f}", sfd.form_str(model.sf.harden()))
             tr.save(model, f'sfd_{rep}.pt')
             with open(f'sfd_{rep}_train.pkl', 'wb') as f:
-                pk.dump((losses, gns, init_attn, opt_attn), f)
+                pk.dump((losses, gns, init_attn, opt_attn, optimal_loss), f)
 
 def do_evaluation(rep):
 
@@ -174,8 +220,8 @@ if __name__ == "__main__":
     do_train = True
     do_eval = True
     do_show = True
-    num_proc = 4
-    num_reps = 4
+    num_proc = 2
+    num_reps = 2
 
     if do_train:
         with Pool(processes=num_proc) as pool:
@@ -190,7 +236,7 @@ if __name__ == "__main__":
         all_losses, all_gns = [], []
         for rep in range(num_reps):
             with open(f'sfd_{rep}_train.pkl', 'rb') as f:
-                (losses, gns, init_attn, opt_attn) = pk.load(f)
+                (losses, gns, init_attn, opt_attn, optimal_loss) = pk.load(f)
                 all_losses.append(losses)
                 all_gns.append(gns)
 
@@ -202,13 +248,13 @@ if __name__ == "__main__":
         pt.subplot(3,1,1)
         pt.plot(all_losses.T, '-', color=(.75,)*3)
         pt.plot(all_losses.mean(axis=0), '-', color='k', label='mean')
+        pt.plot([0, all_losses.shape[1]], [optimal_loss]*2, 'k:', label='optimal')
         pt.ylabel("Loss")
         pt.legend()
 
         pt.subplot(3,1,2)
-        all_losses -= all_losses.min() # for log scale
-        pt.plot(all_losses.T, '-', color=(.75,)*3)
-        pt.plot(all_losses.mean(axis=0), '-', color='k', label='mean')
+        pt.plot(all_losses.T - optimal_loss, '-', color=(.75,)*3)
+        pt.plot(all_losses.mean(axis=0) - optimal_loss, '-', color='k', label='mean')
         pt.ylabel("Loss")
         pt.yscale('log')
         pt.legend()
