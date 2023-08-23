@@ -51,19 +51,19 @@ def do_evaluation(rep):
 if __name__ == "__main__":
 
     do_evo = False
-    do_eval = True
+    do_eval = False
     do_show = True
 
     # just for svm eval
-    num_proc = 2
-    num_reps = 8
+    num_proc = 6
+    num_reps = 30
 
     examples, optimal_loss = load_examples(list(range(3,5)))
     ideal_fitness = -optimal_loss
 
     num_gens = 1000
     pop_size = 200
-    top_size = 20
+    top_size = 40
     mutation_rate = 0.1
     max_depth = 6
 
@@ -131,7 +131,7 @@ if __name__ == "__main__":
             inners, leaves = best_idx[:num_inner], best_idx[num_inner:]
             tree = hfd.to_tree(inners, leaves, sfd.OPS)
     
-            print(f"gen {gen}: fitness ~ {fitness[gen].mean().item():.3f} <= {fitness[gen].max().item():.3f} vs {ideal_fitness:.3f}, ",
+            print(f"gen {gen} of {num_gens}: fitness ~ {fitness[gen].mean().item():.3f} <= {fitness[gen].max().item():.3f} vs {ideal_fitness:.3f},",
                   f"best: {sfd.form_str(tree)}")
     
             with open("genprog.pkl", "wb") as f:
@@ -151,8 +151,15 @@ if __name__ == "__main__":
 
         print(f"best: {sfd.form_str(tree)}")
 
-        pt.plot(fitness[::10,:].numpy(), 'k.')
-        pt.plot(fitness[::10].numpy().mean(axis=1), 'k-')
+        idx = np.arange(0, fitness.shape[0], 20)
+        pt.figure(figsize=(8,3))
+        pt.plot(idx, fitness.numpy()[idx], '.', color=(0,0,0,.1))
+        pt.plot(idx, fitness.numpy()[idx].mean(axis=1), 'k-')
+        pt.ylabel("Fitness")
+        pt.xlabel("Generation")
+        pt.tight_layout()
+        pt.savefig("gp_opt.pdf")
+        pt.savefig("gp_opt.png")
         pt.show()
 
         accus = {}
@@ -169,5 +176,5 @@ if __name__ == "__main__":
         pt.xlabel("N")
         pt.ylabel("Accuracy")
         pt.tight_layout()
-        pt.savefig("sfd_acc.pdf")
+        pt.savefig("gp_acc.pdf")
         pt.show()

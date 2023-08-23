@@ -22,10 +22,10 @@ def get_class_examples(dataset, classes, num):
 
 if __name__ == "__main__":
 
-    do_eval = True
+    do_eval = False
     N = 1 + 28**2 # MNIST is 1x28x28 images, plus bias
     num_examples = {"train": 100, "test": 100}
-    num_reps = 30
+    num_reps = 100
 
     # define function for perceptron learning rule
     def perceptron_rule(w, x, y, N):
@@ -131,7 +131,7 @@ if __name__ == "__main__":
     # pt.xticks([0,1], ['train','test'], rotation=90)
     # pt.show()
 
-    pt.figure(figsize=(4,3))
+    pt.figure(figsize=(6,3))
     # pt.hist(accs[('train','gp')], bins = np.linspace(0, 1.0, 10), align='left', rwidth=0.5, label="Train")
     # pt.hist(accs[('test','gp')], bins = np.linspace(0, 1.0, 10), align='mid', rwidth=0.5, label="Test")
     # # pt.xlim([.3, 1.0])

@@ -85,7 +85,7 @@ if __name__ == "__main__":
         
             # ##### soft
         
-            model = tr.load('sfd_0.pt') # best index from softfit dense eval
+            model = tr.load('sfd_3.pt') # best index from softfit dense eval
             form = model.sf.harden()
             print("form", form_str(form))
         
