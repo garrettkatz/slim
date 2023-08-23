@@ -8,6 +8,11 @@ def form_str(node):
     if type(op) == str:
         return op
 
+    if op.__name__ == "idleft":
+        return form_str(args[0])
+    if op.__name__ == "idright":
+        return form_str(args[1])
+
     if op.__name__[-4:] == "left":
         return f"{op.__name__[:-4]}({form_str(args[0])})"
     if op.__name__[-5:] == "right":

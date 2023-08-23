@@ -7,8 +7,8 @@ from sklearn.svm import LinearSVC
 import torch as tr
 import torchvision as tv
 from torchvision.transforms import ToTensor
-from softform import form_str, form_eval
-from softfit_dense import VecRule
+import softform_dense as sfd
+import hardform_dense as hfd
 
 # assumes at least num examples with specified classes in dataset
 def get_class_examples(dataset, classes, num):
@@ -25,7 +25,7 @@ if __name__ == "__main__":
     do_eval = True
     N = 1 + 28**2 # MNIST is 1x28x28 images, plus bias
     num_examples = {"train": 100, "test": 100}
-    num_reps = 10
+    num_reps = 30
 
     # define function for perceptron learning rule
     def perceptron_rule(w, x, y, N):
@@ -42,7 +42,7 @@ if __name__ == "__main__":
 
     if do_eval:
 
-        accs = {(key,mod): np.empty(num_reps) for key in ("train","test") for mod in ("svm", "perceptron", "soft")}
+        accs = {(key,mod): np.empty(num_reps) for key in ("train","test") for mod in ("svm", "perceptron", "gp")}
         for rep in range(num_reps):
     
             classes = tuple(np.random.choice(10, size=2, replace=False))
@@ -54,7 +54,7 @@ if __name__ == "__main__":
                 Y[key] = np.empty(num_examples[key], dtype=int)
                 for n, (x, y) in enumerate(get_class_examples(datasets[key], classes, num_examples[key])):
                     x = x.flatten().numpy()
-                    # X[key][n,:N-1] = (x > (x.max() + x.min())/2).astype(int)
+                    # X[key][n] = (x > (x.max() + x.min())/2).astype(int)
                     X[key][n, 0] = -1 # bias to match training data
                     X[key][n, 1:] = (-1)**(x < (x.max() + x.min())/2).astype(int)
                     Y[key][n] = (-1)**int(y == classes[0])
@@ -83,73 +83,64 @@ if __name__ == "__main__":
             # pt.imshow(w.reshape(28,28))
             # pt.show()
         
-            # ##### soft
+            # ##### gp
+
+            with open("genprog.pkl", "rb") as f:
+                form, _ = pk.load(f)
+            print("form", sfd.form_str(form))
         
-            model = tr.load('sfd_0.pt') # best index from softfit dense eval
-            form = model.sf.harden()
-            print("form", form_str(form))
-        
-            def soft_rule(w, x, y, N):
+            def gp_rule(w, x, y, N):
                 inputs = tr.stack([
                     tr.nn.functional.normalize(tr.tensor(w, dtype=tr.float32).view(1,N)), # w
                     tr.tensor(x, dtype=tr.float32).view(1,N), # x
                     tr.tensor(y, dtype=tr.float32).view(1,1).expand(1, N), # y
                     tr.ones(1,N), # 1
                 ])
-                with tr.no_grad():
-                    w_new = model(inputs)
+                w_new = hfd.tree_eval(form, inputs)
+                w_new = tr.nn.functional.normalize(w_new)
                 return w_new.clone().squeeze().numpy()
-
-                # inputs = {
-                #     'w': tr.nn.functional.normalize(tr.tensor(w, dtype=tr.float32).view(1,N)),
-                #     'x': tr.tensor(x, dtype=tr.float32).view(1,N),
-                #     'y': tr.tensor(y, dtype=tr.float32).view(1,1).expand(1, N),
-                #     '1': tr.ones(1,N),
-                # }
-                # w_new = tr.nn.functional.normalize(form_eval(form, inputs))
-                # return w_new.clone().squeeze().numpy()
         
             w = np.zeros(N)
             for i, (x, y) in enumerate(zip(X['train'], Y['train'])):
-                w = soft_rule(w, x, y, N)
-                # if i % 10 == 0: print(f"soft {i}", np.fabs(w).max())
-                # print(f"soft {i}", np.fabs(w).max())
+                w = gp_rule(w, x, y, N)
+                # if i % 10 == 0: print(f"gp {i}", np.fabs(w).max())
+                # print(f"gp {i}", np.fabs(w).max())
         
             for key in ["train", "test"]:
                 pred = np.sign(X[key] @ w)
-                soft_acc = (pred == Y[key]).mean()
-                print(f"soft {key} acc = {soft_acc}")
-                accs[(key,"soft")][rep] = soft_acc
+                gp_acc = (pred == Y[key]).mean()
+                print(f"gp {key} acc = {gp_acc}")
+                accs[(key,"gp")][rep] = gp_acc
 
-        with open("mnist_eval_dense.pkl","wb") as f:
+        with open("mnist_eval_gp.pkl","wb") as f:
             pk.dump(accs, f)
 
-    with open("mnist_eval_dense.pkl","rb") as f:
+    with open("mnist_eval_gp.pkl","rb") as f:
         accs = pk.load(f)
 
-    result = ttest_1samp(accs['test','soft'], 0.5, alternative='greater')
+    result = ttest_1samp(accs['test','gp'], 0.5, alternative='greater')
     print(f"stat={result.statistic}, pval={result.pvalue}")
 
-    # pt.plot([0]*num_reps, accs[('train','soft')], 'r.')
-    # pt.plot([1]*num_reps, accs[('test','soft')], 'b.')
-    # pt.scatter(0, np.mean(accs[('train','soft')]), 50, color='r')
-    # pt.scatter(1, np.mean(accs[('test','soft')]), 50, color='b')
-    # pt.scatter(0, np.mean(accs[('train','soft')]) - np.std(accs[('train','soft')]), 50, color='r')
-    # pt.scatter(1, np.mean(accs[('test','soft')]) - np.std(accs[('test','soft')]), 50, color='b')
+    # pt.plot([0]*num_reps, accs[('train','gp')], 'r.')
+    # pt.plot([1]*num_reps, accs[('test','gp')], 'b.')
+    # pt.scatter(0, np.mean(accs[('train','gp')]), 50, color='r')
+    # pt.scatter(1, np.mean(accs[('test','gp')]), 50, color='b')
+    # pt.scatter(0, np.mean(accs[('train','gp')]) - np.std(accs[('train','gp')]), 50, color='r')
+    # pt.scatter(1, np.mean(accs[('test','gp')]) - np.std(accs[('test','gp')]), 50, color='b')
     # pt.plot([0,1],[.5,.5], 'k:')
     # pt.xticks([0,1], ['train','test'], rotation=90)
     # pt.show()
 
     pt.figure(figsize=(4,3))
-    # pt.hist(accs[('train','soft')], bins = np.linspace(0, 1.0, 10), align='left', rwidth=0.5, label="Train")
-    # pt.hist(accs[('test','soft')], bins = np.linspace(0, 1.0, 10), align='mid', rwidth=0.5, label="Test")
+    # pt.hist(accs[('train','gp')], bins = np.linspace(0, 1.0, 10), align='left', rwidth=0.5, label="Train")
+    # pt.hist(accs[('test','gp')], bins = np.linspace(0, 1.0, 10), align='mid', rwidth=0.5, label="Test")
     # # pt.xlim([.3, 1.0])
-    pt.hist(accs[('train','soft')], align='left', rwidth=0.5, label="Train")
-    pt.hist(accs[('test','soft')], align='mid', rwidth=0.5, label="Test")
+    pt.hist(accs[('train','gp')], align='left', rwidth=0.5, label="Train")
+    pt.hist(accs[('test','gp')], align='mid', rwidth=0.5, label="Test")
     pt.xlabel("Accuracy")
     pt.ylabel("Frequency")
     pt.legend()
     pt.tight_layout()
-    pt.savefig("mnist_dense.pdf")
+    pt.savefig("mnist_gp.pdf")
     pt.show()
 

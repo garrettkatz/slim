@@ -19,6 +19,37 @@ class VecRule(tr.nn.Module):
         w_pred = tr.nn.functional.normalize(w_pred)
         return w_pred
 
+def load_examples(Ns):
+
+    examples = []
+    optimal_loss = 0.
+    for N in Ns:
+        # get all transitions
+        fname = f"ltms_{N}_c.npz"
+        ltms = np.load(fname)
+        W, X, Y = ltms["W"], {N: ltms["X"]}, {N: ltms["Y"]}
+        w_new, w_old, x, y, margins = all_transitions(X, Y, N)
+
+        # package as tensors
+        w_new = tr.tensor(np.concatenate(w_new, axis=0), dtype=tr.float32)
+        w_old = tr.tensor(np.concatenate(w_old, axis=0), dtype=tr.float32)
+        x = tr.tensor(np.stack(x), dtype=tr.float32)
+        y = tr.tensor(y, dtype=tr.float32).view(-1,1).expand(*x.shape) # broadcast
+        _1 = tr.ones(*x.shape)
+        margins = tr.tensor(np.stack(margins))
+        mdenoms = 0.5*tr.pi - tr.acos(tr.clamp(margins, -1., 1.))
+
+        # calculate optimal loss when all cosine sims are 1.0
+        sinmarg = tr.cos(mdenoms)
+        optimal_loss += -(1.0 / sinmarg).mean().item()
+
+        inputs = tr.stack([w_old, x, y, _1])
+        examples.append((inputs, (w_new, mdenoms)))
+
+    optimal_loss /= len(examples)
+
+    return examples, optimal_loss
+
 def do_training_run(rep):
 
     # make sure different runs have different random numbers
@@ -46,35 +77,10 @@ def do_training_run(rep):
     # # medium run
     # num_itrs = 5000
 
-    # big run
-    num_itrs = 30000
+    # # big run
+    # num_itrs = 30000
 
-    examples = []
-    optimal_loss = 0.
-    for N in range(3,5):
-        # get all transitions
-        fname = f"ltms_{N}_c.npz"
-        ltms = np.load(fname)
-        W, X, Y = ltms["W"], {N: ltms["X"]}, {N: ltms["Y"]}
-        w_new, w_old, x, y, margins = all_transitions(X, Y, N)
-
-        # package as tensors
-        w_new = tr.tensor(np.concatenate(w_new, axis=0), dtype=tr.float32)
-        w_old = tr.tensor(np.concatenate(w_old, axis=0), dtype=tr.float32)
-        x = tr.tensor(np.stack(x), dtype=tr.float32)
-        y = tr.tensor(y, dtype=tr.float32).view(-1,1).expand(*x.shape) # broadcast
-        _1 = tr.ones(*x.shape)
-        margins = tr.tensor(np.stack(margins))
-        mdenoms = 0.5*tr.pi - tr.acos(tr.clamp(margins, -1., 1.))
-
-        # calculate optimal loss when all cosine sims are 1.0
-        sinmarg = tr.cos(mdenoms)
-        optimal_loss += -(1.0 / sinmarg).mean().item()
-
-        inputs = tr.stack([w_old, x, y, _1])
-        examples.append((inputs, (w_new, mdenoms)))
-
-    optimal_loss /= len(examples)
+    examples, optimal_loss = load_examples(list(range(3,5)))
 
     if use_noam:
         model = VecRule(max_depth, logits=use_softmax)
@@ -220,8 +226,8 @@ if __name__ == "__main__":
     do_train = True
     do_eval = True
     do_show = True
-    num_proc = 5
-    num_reps = 5
+    num_proc = 2
+    num_reps = 2
 
     if do_train:
         with Pool(processes=num_proc) as pool:

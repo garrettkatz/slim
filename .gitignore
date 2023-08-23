@@ -4,5 +4,9 @@ __pycache__
 *.npy
 *.pkl
 *.pdf
+*.png
+*.lprof
 *.pt
+*.zip
+*.txt
 
