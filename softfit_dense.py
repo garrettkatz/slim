@@ -71,11 +71,11 @@ def do_training_run(rep):
     else:
         sched = NoScheduler()
 
-    # quick test
-    num_itrs = 100
+    # # quick test
+    # num_itrs = 100
 
-    # # medium run
-    # num_itrs = 5000
+    # medium run
+    num_itrs = 1000
 
     # # big run
     # num_itrs = 30000
@@ -139,9 +139,12 @@ def do_training_run(rep):
             for attn in (model.sf.inners_attn, model.sf.leaves_attn):
                 # project away grad components orthogonal to attention simplices
                 attn.grad -= attn.grad.mean(dim=1, keepdim=True)
-                # clip grads to limits of attention simplices
-                minpos = tr.min(tr.where(attn.grad > 0, (1 - attn.data) / attn.grad, 1), dim=1, keepdim=True).values
-                minneg = tr.min(tr.where(attn.grad < 0, (  - attn.data) / attn.grad, 1), dim=1, keepdim=True).values
+                # clip negative grads to limits of attention simplices
+                # # these were clipping in positive grad direction!
+                # minpos = tr.min(tr.where(attn.grad > 0, (1 - attn.data) / attn.grad, 1), dim=1, keepdim=True).values
+                # minneg = tr.min(tr.where(attn.grad < 0, (  - attn.data) / attn.grad, 1), dim=1, keepdim=True).values
+                minpos = tr.min(tr.where(attn.grad > 0, (attn.data    ) / attn.grad, 1), dim=1, keepdim=True).values
+                minneg = tr.min(tr.where(attn.grad < 0, (attn.data - 1) / attn.grad, 1), dim=1, keepdim=True).values
                 grad_scale = tr.minimum(tr.minimum(minpos, minneg), tr.ones(minpos.shape))
                 attn.grad *= grad_scale
                 clipped += (grad_scale != 1.).tolist()
@@ -226,8 +229,8 @@ if __name__ == "__main__":
     do_train = True
     do_eval = True
     do_show = True
-    num_proc = 2
-    num_reps = 2
+    num_proc = 4
+    num_reps = 4
 
     if do_train:
         with Pool(processes=num_proc) as pool:

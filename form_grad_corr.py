@@ -19,7 +19,7 @@ if __name__ == "__main__":
         W, X, Y = ltms["W"], {N: ltms["X"]}, {N: ltms["Y"]}
         print(N)
         print(W)
-        w_new, w_old, x, y = sd.all_transitions(X, Y, N)
+        w_new, w_old, x, y, margins = sd.all_transitions(X, Y, N)
 
         w_new = tr.nn.functional.normalize(tr.tensor(np.concatenate(w_new, axis=0), dtype=tr.float32))
         w_old = tr.nn.functional.normalize(tr.tensor(np.concatenate(w_old, axis=0), dtype=tr.float32))

@@ -1,3 +1,4 @@
+import torch as tr
 
 def to_tree(inners_idx, leaves_idx, ops):
     nodes = {}
@@ -23,11 +24,14 @@ def tree_eval(root, inputs):
     return op(arg0, arg1)
 
 def to_attn(inners_idx, leaves_idx, num_ops, num_inputs):
+    if type(inners_idx) != tr.Tensor: inners_idx = tr.tensor(inners_idx)
+    if type(leaves_idx) != tr.Tensor: leaves_idx = tr.tensor(leaves_idx)
+
     inners_attn = tr.zeros(len(inners_idx), num_ops)
     leaves_attn = tr.zeros(len(leaves_idx), num_inputs)
 
-    inners_attn[tr.arange(len(inners_idx)), tr.tensor(inners_idx)] = 1.
-    leaves_attn[tr.arange(len(leaves_idx)), tr.tensor(leaves_idx)] = 1.
+    inners_attn[tr.arange(len(inners_idx)), inners_idx] = 1.
+    leaves_attn[tr.arange(len(leaves_idx)), leaves_idx] = 1.
 
     return inners_attn, leaves_attn
 
