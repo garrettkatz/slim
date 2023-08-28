@@ -22,7 +22,7 @@ def get_class_examples(dataset, classes, num):
 
 if __name__ == "__main__":
 
-    do_eval = False
+    do_eval = True
     N = 1 + 28**2 # MNIST is 1x28x28 images, plus bias
     num_examples = {"train": 100, "test": 100}
     num_reps = 100

@@ -7,6 +7,27 @@ import hardform_dense as hfd
 from svm_eval import svm_eval
 from softfit_dense import load_examples
 
+# constrain formulas to be span rules
+# idx[i, :] for individual i
+def spanify(idx):
+    num_nodes = idx.shape[-1]
+    max_depth = round(np.log2(num_nodes + 1)) - 1
+    num_inner = 2**max_depth - 1
+
+    idx[:,         0] = 14 # add(
+    idx[:,         1] = 16 #     mul(
+    idx[:, num_inner] =  0 #         w,
+    idx[:,         4] = 12 #         mean(_))
+    idx[:,         2] = 16 #     mul(
+    idx[:,         5] = 12 #         mean(_),
+    idx[:,        -1] =  1 #         x)
+
+    left_path = 2**tr.arange(max_depth+1) - 1
+    idx[:, left_path[2:-1]] = 0 # idleft
+    idx[:, left_path[3:]-1] = 1 # idright
+
+    return idx
+
 def do_evaluation(rep):
 
     # make sure different runs have different random numbers
@@ -50,9 +71,11 @@ def do_evaluation(rep):
 
 if __name__ == "__main__":
 
-    do_evo = False
-    do_eval = False
+    do_evo = True
+    do_eval = True
     do_show = True
+
+    do_span = True
 
     # just for svm eval
     num_proc = 6
@@ -74,12 +97,13 @@ if __name__ == "__main__":
     # initialize coefficients for n in node n's descendent tree
     n_coef = 2**tr.log2(tr.arange(num_nodes) + 1).to(int)
 
-    # initialize population
-    inners_idx = tr.randint(len(sfd.OPS), size=(pop_size, num_inner))
-    leaves_idx = tr.randint(4, size=(pop_size, num_leaves))
-    idx = tr.cat((inners_idx, leaves_idx), dim=1)
-
     if do_evo:
+
+        # initialize population
+        inners_idx = tr.randint(len(sfd.OPS), size=(pop_size, num_inner))
+        leaves_idx = tr.randint(4, size=(pop_size, num_leaves))
+        idx = tr.cat((inners_idx, leaves_idx), dim=1)
+        if do_span: idx = spanify(idx)
 
         fitness = tr.zeros(num_gens, pop_size)
         for gen in range(num_gens):
@@ -126,6 +150,7 @@ if __name__ == "__main__":
             # keep the best, replace the rest
             new_idx[top[0]] = idx[top[0]]
             idx = new_idx
+            if do_span: idx = spanify(idx)
     
             best_idx = idx[top[0]]
             inners, leaves = best_idx[:num_inner], best_idx[num_inner:]
