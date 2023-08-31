@@ -80,6 +80,7 @@ def all_transitions(X, Y, N, T=None):
                     w_new.append(w[i][Kk])
                     margins.append(m[i][Kk])
 
+    # margins = min_x | cos(angle(w_new, x))
     return w_new, w_old, x, y, margins
 
 if __name__ == "__main__":
