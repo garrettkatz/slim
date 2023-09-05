@@ -165,7 +165,26 @@ def fitness_function(n: Array):
 
 if __name__ == "__main__":
 
-    dataset = load_data(Ns=[3,4], perceptron=True)
+    do_perceptron = True
+
+    dataset = load_data(Ns=[3,4], perceptron=do_perceptron)
+
+    # sanity-check that perceptron rule does fit the data
+    if do_perceptron:
+        rule = SpanRule(
+            alpha = Constant(value=1),
+            beta = Sub(
+                left = Variable(index=2),
+                right = Sign(
+                    arg = Dot(
+                        left = Variable(index=0),
+                        right = Variable(index=1)
+                    )
+                )
+            )
+        )
+        fitness = fitness_function(rule)
+        print(f"Perceptron fitness = {fitness}, rule = {rule}")
 
     # productions = [Constant, Dimension, Variable, Add, Sub, Mul, Div, Maximum, Minimum, Dot, Sign, Sqrt, Log, Exp, Sum, Min, Max]
     productions = [Constant, Dimension, Variable, Add, Sub, Mul, Div, Maximum, Minimum, Dot, Sign, Sqrt, Sum, Min, Max]
