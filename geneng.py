@@ -15,25 +15,29 @@ from geneticengine.metahandlers.ints import IntRange
 
 from svm_data import all_transitions
 
-Ns = [3, 4]
-dataset = []
-for N in Ns:
-    fname = f"ltms_{N}_c.npz"
-    ltms = np.load(fname)
-    X, Y = {N: ltms["X"]}, {N: ltms["Y"]}
-    w_new, w_old, x, y, margins = all_transitions(X, Y, N)
-    
-    w_new = np.concatenate(w_new, axis=0)
-    w_old = np.concatenate(w_old, axis=0)
-    x = np.stack(x).astype(float)
-    y = np.stack(y).astype(float).reshape(-1, 1)
-    margins = np.stack(margins).reshape(-1, 1)
-    
-    # sanity-check: try to recover perceptron instead of svm w_new
-    w_new = w_old + (y - np.sign((w_old*x).sum(axis=1,keepdims=True)))*x
-    w_new /= np.maximum(np.linalg.norm(w_new, axis=1, keepdims=True), 10e-8)
+def load_data(Ns, perceptron=False):
 
-    dataset.append([w_old, x, y, w_new, margins])
+    dataset = []
+    for N in Ns:
+        fname = f"ltms_{N}_c.npz"
+        ltms = np.load(fname)
+        X, Y = {N: ltms["X"]}, {N: ltms["Y"]}
+        w_new, w_old, x, y, margins = all_transitions(X, Y, N)
+        
+        w_new = np.concatenate(w_new, axis=0)
+        w_old = np.concatenate(w_old, axis=0)
+        x = np.stack(x).astype(float)
+        y = np.stack(y).astype(float).reshape(-1, 1)
+        margins = np.stack(margins).reshape(-1, 1)
+        
+        # sanity-check: try to recover perceptron instead of svm w_new
+        if perceptron:
+            w_new = w_old + (y - np.sign((w_old*x).sum(axis=1,keepdims=True)))*x
+            w_new /= np.maximum(np.linalg.norm(w_new, axis=1, keepdims=True), 10e-8)
+    
+        dataset.append([w_old, x, y, w_new, margins])
+
+    return dataset
 
 ### set up grammar
 class Scalar(ABC): pass
@@ -85,9 +89,6 @@ class SpanRule(Vector):
     def __str__(self): return f"({self.alpha}*line[0] + {self.beta}*line[1])"
     def pretty(self): return f"{self.alpha.pretty()}*w + {self.beta.pretty()}*x"
 
-grammar = extract_grammar([Value, ScalarVar, VectorVar, Sub, Dot, Sign], SpanRule)
-print("Grammar: {}.".format(repr(grammar)))
-
 def fitness_function(n: SpanRule):
     code = f"lambda line: {str(n)}"
     rule = eval(code)
@@ -98,25 +99,34 @@ def fitness_function(n: SpanRule):
         fitness += (w_pred * w_new).sum(axis=1).mean() # cosine similarity
     return fitness / len(dataset)
 
-prob = SingleObjectiveProblem(
-    minimize=False,
-    fitness_function=fitness_function,
-)
 
-alg = SimpleGP(
-    grammar,
-    problem=prob,
-    probability_crossover=0.4,
-    probability_mutation=0.4,
-    number_of_generations=20,
-    max_depth=5,
-    population_size=200,
-    selection_method=("tournament", 2),
-    n_elites=15,
-    seed = np.random.randint(123456) # 123 for reproducible convergence on perceptron
-)
-best = alg.evolve()
-print(
-    f"Fitness of {best.get_fitness(prob)} by genotype: {best.genotype}\nwith phenotype: {best.get_phenotype().pretty()}",
-)
+if __name__ == "__main__":
 
+    dataset = load_data(Ns = [3, 4], perceptron=True)
+    
+    grammar = extract_grammar([Value, ScalarVar, VectorVar, Sub, Dot, Sign], SpanRule)
+    print("Grammar: {}.".format(repr(grammar)))
+    
+    prob = SingleObjectiveProblem(
+        minimize=False,
+        fitness_function=fitness_function,
+    )
+    
+    alg = SimpleGP(
+        grammar,
+        problem=prob,
+        probability_crossover=0.4,
+        probability_mutation=0.4,
+        number_of_generations=20,
+        max_depth=5,
+        population_size=200,
+        selection_method=("tournament", 2),
+        n_elites=15,
+        seed = np.random.randint(123456), # 123 for reproducible convergence on perceptron
+        target_fitness = 0.999999,
+    )
+    best = alg.evolve()
+    print(
+        f"Fitness of {best.get_fitness(prob)} by genotype: {best.genotype}\nwith phenotype: {best.get_phenotype().pretty()}",
+    )
+    
