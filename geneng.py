@@ -33,7 +33,7 @@ def load_data(Ns, perceptron=False):
         # sanity-check: try to recover perceptron instead of svm w_new
         if perceptron:
             w_new = w_old + (y - np.sign((w_old*x).sum(axis=1,keepdims=True)))*x
-            w_new /= np.maximum(np.linalg.norm(w_new, axis=1, keepdims=True), 10e-8)
+            w_new = w_new / np.maximum(np.linalg.norm(w_new, axis=1, keepdims=True), 10e-8)
     
         dataset.append([w_old, x, y, w_new, margins])
 
@@ -95,7 +95,7 @@ def fitness_function(n: SpanRule):
     fitness = 0.
     for line in dataset:
         w_pred, w_new, margins = rule(line), line[-2], line[-1]
-        w_pred /= np.maximum(np.linalg.norm(w_pred, axis=1, keepdims=True), 10e-8)
+        w_pred = w_pred / np.maximum(np.linalg.norm(w_pred, axis=1, keepdims=True), 10e-8)
         fitness += (w_pred * w_new).sum(axis=1).mean() # cosine similarity
     return fitness / len(dataset)
 
