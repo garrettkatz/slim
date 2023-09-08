@@ -4,6 +4,6 @@ class EQL(torch.nn.Module):
     def __init__(self, N) -> None:
         super().__init__()
 
-    def foward(self, X, W, Y):
+    def foward(self, input):
         pass
 
