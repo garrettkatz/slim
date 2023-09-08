@@ -188,6 +188,7 @@ if __name__ == "__main__":
 
     # productions = [Constant, Dimension, Variable, Add, Sub, Mul, Div, Maximum, Minimum, Dot, Sign, Sqrt, Log, Exp, Sum, Min, Max]
     productions = [Constant, Dimension, Variable, Add, Sub, Mul, Div, Maximum, Minimum, Dot, Sign, Sqrt, Sum, Min, Max]
+    # productions = [Constant, Dimension, Variable, Sub, Dot, Sign] # perceptron sub-set
     grammar = extract_grammar(productions, SpanRule)
     # grammar = extract_grammar(productions, VecRule)
     print("Grammar: {}.".format(repr(grammar)))

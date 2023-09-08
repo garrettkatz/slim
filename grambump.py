@@ -491,8 +491,6 @@ if __name__ == "__main__":
     abs2 = Abs(Constant(2))
     print(f"abs2 {abs2} fitness = {fitness_function(abs2)}")
 
-    input('.')
-
     # success, match = mul.match(neighbor_patterns[1][0])
     # print('success, match')
     # print(success, match)
@@ -504,8 +502,11 @@ if __name__ == "__main__":
     print('neighbors:')
     for neighbor in formula.neighbors():
         print(f"  {neighbor}  -->  {fitness_function(neighbor)}")
+        print(neighbor.tree_str("  "))
         # for n2 in neighbor.neighbors():
         #     print(f"    fitness({n2}) = {fitness_function(n2)}")
+
+    input('.')
 
     max_evals = 200000
 
