@@ -165,6 +165,7 @@ def fitness_function(n: Array):
 
 if __name__ == "__main__":
 
+    # flag for perceptron rules, false then svm
     do_perceptron = True
 
     dataset = load_data(Ns=[3,4], perceptron=do_perceptron)
