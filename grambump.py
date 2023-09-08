@@ -35,7 +35,7 @@ class Node:
         if not issubclass(self.out_type, pattern.out_type): return False, {}
 
         # parameters with same output type are always matched
-        if type(pattern) == Parameter: return True, {pattern.num: self}
+        if type(pattern) == Parameter: return True, {pattern.value: self}
 
         # otherwise, node types must match
         if type(self) != type(pattern): return False, {}
@@ -57,8 +57,8 @@ class Node:
 
         # base case: replace parameter with its match
         if type(self) == Parameter:
-            if self.num not in matches: print(self, matches)
-            return matches[self.num]
+            if self.value not in matches: print(self, matches)
+            return matches[self.value]
 
         # base case: terminals have no args
         if isinstance(self, Terminal): return self
@@ -167,14 +167,16 @@ class Operator(Node):
         return type(self)(*args, out_type=self.out_type)
 
 # parameter placeholder in patterns
-class Parameter(Node):
-    def __init__(self, num, out_type=Output):
-        super().__init__(out_type=out_type)
-        self.num = num
+class Parameter(Terminal):
     def __str__(self):
-        return f"Param({self.num})"
+        return f"Param({self.value})"
 
 class ElementwiseUnary(Operator):
+    def __init__(self, arg=None, out_type=Output):
+        super().__init__(arg, out_type=out_type)
+        # same output type as inputs if specified
+        if self.args[0] is not None: self.out_type = self.args[0].out_type
+
     def random_arg_types(self):
         if self.out_type is Scalar: choice = (Scalar,)
         else: choice = (Vector,)
@@ -284,31 +286,39 @@ class Largest(ReducerUnary):
     def __str__(self):
         return f"largest({self.args[0].strip()})"
 
-class Binary(Operator):
+class ElementwiseBinary(Operator):
+    def __init__(self, arg0=None, arg1=None, out_type=Output):
+        super().__init__(arg0, arg1, out_type=out_type)
+        # same output type as inputs if specified
+        if self.args != (None, None):
+            arg_types = tuple(arg.out_type for arg in self.args)
+            if arg_types == (Scalar, Scalar): self.out_type = Scalar
+            elif Vector in arg_types: self.out_type = Vector
     def random_arg_types(self):
-        if self.out_type is Scalar: choices = ((Scalar, Scalar),)
-        else: choices = ((Scalar, Vector), (Vector, Scalar), (Vector, Vector))
+        choices = ((Scalar, Scalar), (Scalar, Vector), (Vector, Scalar), (Vector, Vector))
+        if self.out_type is Scalar: choices = choices[:1]
+        if self.out_type is Vector: choices = choices[1:]
         return choices[np.random.randint(len(choices))]
 
-class Add(Binary):
+class Add(ElementwiseBinary):
     def __call__(self, inputs):
         return self.args[0](inputs) + self.args[1](inputs)
     def __str__(self):
         return f"({self.args[0]} + {self.args[1]})"
 
-class Mul(Binary):
+class Mul(ElementwiseBinary):
     def __call__(self, inputs):
         return self.args[0](inputs) * self.args[1](inputs)
     def __str__(self):
         return f"({self.args[0]} * {self.args[1]})"
 
-class Min(Binary):
+class Min(ElementwiseBinary):
     def __call__(self, inputs):
         return np.minimum(self.args[0](inputs), self.args[1](inputs))
     def __str__(self):
         return f"min({self.args[0].strip()}, {self.args[1].strip()})"
 
-class Max(Binary):
+class Max(ElementwiseBinary):
     def __call__(self, inputs):
         return np.maximum(self.args[0](inputs), self.args[1](inputs))
     def __str__(self):
@@ -506,23 +516,22 @@ if __name__ == "__main__":
         # for n2 in neighbor.neighbors():
         #     print(f"    fitness({n2}) = {fitness_function(n2)}")
 
-    input('.')
 
-    max_evals = 200000
+    max_evals = 50000
 
-    # # random sampling
-    # print("\n********************** random sampling\n")
-    # max_fit = -1
-    # max_span = None
-    # for rep in range(max_evals):
-    #     span = SpanRule(None, None).sprout(term_prob=np.random.rand(), max_depth=6)
-    #     fit = fitness_function(span)
-    #     if fit > max_fit:
-    #         max_fit, max_span = fit, span
-    #         print(f"{rep}: {fit} vs {max_fit} <- {max_span}")
-    #         # print(max_span.tree_str())
-    #         if max_fit > .99999: break
-    #     # print(f"{rep}: {fit} vs {max_fit} <- {span}, {max_span}")
+    # random sampling
+    print("\n********************** random sampling\n")
+    max_fit = -1
+    max_span = None
+    for rep in range(max_evals):
+        span = SpanRule(None, None).sprout(term_prob=np.random.rand(), max_depth=6)
+        fit = fitness_function(span)
+        if fit > max_fit:
+            max_fit, max_span = fit, span
+            print(f"{rep}: {fit} vs {max_fit} <- {max_span}")
+            # print(max_span.tree_str())
+            if max_fit > .99999: break
+        # print(f"{rep}: {fit} vs {max_fit} <- {span}, {max_span}")
 
     print("\n********************** repeated greedy\n")
     # repeated greedy
