@@ -4,6 +4,13 @@ from typing import Annotated
 
 import numpy as np
 
+import time
+import datetime
+import os
+import argparse
+import yaml
+from utils import SummaryLogger
+
 from geneticengine.algorithms.gp.simplegp import SimpleGP
 from geneticengine.algorithms.random_search import RandomSearch
 from geneticengine.core.grammar import extract_grammar
@@ -163,10 +170,39 @@ def fitness_function(n: Array):
         fitness += (w_pred * w_new).sum(axis=1).mean() # cosine similarity
     return fitness / len(dataset)
 
+def read_parser():
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("--log_path", default="./")
+
+    parser.add_argument("--do_perceptron", action="store_true")
+
+    parser.add_argument("--number_of_generations", type=int, default=5000)
+    parser.add_argument("--max_depth", type=int, default=7)
+    parser.add_argument("--population_size", type=int, default=1000)
+    parser.add_argument("--selection_method", type=str, default="tournament")
+    parser.add_argument("--selection_involved_indiv_num", type=int, default=2)
+    parser.add_argument("--n_elites", type=int, default=50)
+    parser.add_argument("--n_novelties", type=int, default=100)
+    # parser.add_argument("--rand_seed", type=int, default=123456)
+    parser.add_argument("--target_fitness", type=float, default=0.999999)
+    parser.add_argument("--parallel_eval", action="store_true")
+
+    config = parser.parse_args()
+    return config
+    
+
 if __name__ == "__main__":
 
+    config = read_parser()
+
+    # save config file
+    summary = SummaryLogger(config.log_path)
+    with open(os.path.join(config.log_path, 'config.yaml'), 'w') as f:
+        yaml.dump(vars(config), f)
+
     # flag for perceptron rules, false then svm
-    do_perceptron = True
+    do_perceptron = config.do_perceptron
 
     dataset = load_data(Ns=[3,4], perceptron=do_perceptron)
 
@@ -199,25 +235,38 @@ if __name__ == "__main__":
         fitness_function=fitness_function,
     )
     
+    parallel_eval = config.parallel_eval
+
+    start = time.time()
     alg = SimpleGP(
         grammar,
         problem=prob,
         # probability_crossover=0.4,
         # probability_mutation=0.4,
-        number_of_generations=5000,
-        max_depth=7,
-        population_size=1000,
-        selection_method=("tournament", 2),
-        n_elites=50,
-        n_novelties=100,
+        number_of_generations=config.number_of_generations,
+        max_depth=config.max_depth,
+        population_size=config.population_size,
+        selection_method=(config.selection_method, config.selection_involved_indiv_num),
+        n_elites=config.n_elites,
+        n_novelties=config.n_novelties,
         seed = np.random.randint(123456), # 123 for reproducible convergence on perceptron
-        target_fitness=0.999999,
+        target_fitness=config.target_fitness,
         # favor_less_complex_trees=True,
+        parallel_evaluation=parallel_eval
     )
-
-
+    
     best = alg.evolve()
+    
+    end = time.time()
+
+    gp_exc_time = str(datetime.timedelta(seconds=end-start))
+    print(gp_exc_time)
+
     print(
         f"Fitness of {best.get_fitness(prob)} by genotype: {best.genotype}",
     )
+    result_str = "time: {} \nexpression:{}".format(gp_exc_time, str(best.genotype))
+    with open(os.path.join(config.log_path, 'expression.txt'), 'w') as f:
+        f.write(result_str)
+    
 
