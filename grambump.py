@@ -471,9 +471,18 @@ def queued(guide, form, fit_fun, max_depth, max_itrs, max_queue, fit_target=.999
 
 if __name__ == "__main__":
 
+    import pickle as pk
     from geneng import load_data
 
     do_perceptron = False
+
+    do_random = False
+    do_greedy = False
+    do_queued = True
+    do_show = False
+
+    # max_evals = 50_000
+    max_evals = 1_000_000_000
 
     dataset = load_data(Ns=[3,4], perceptron=do_perceptron)
     # dataset[n]: [w_old, x, y, w_new, margins]
@@ -615,79 +624,95 @@ if __name__ == "__main__":
         #     print(f"    fitness({n2}) = {fitness_function(n2)}")
 
 
-    # max_evals = 10_000
-    max_evals = 1_000_000_000
+    if do_random:
 
-    # print("\n********************** random sampling\n")
-    # max_fit = -1
-    # max_span = None
-    # for rep in range(max_evals):
-    #     # span = SpanRule(None, None).sprout(term_prob=np.random.rand(), max_depth=6)
-    #     span = guide.sprout(SpanRule, Vector, term_prob=np.random.rand(), max_depth=6)
-    #     fit = fitness_function(span)
-    #     if fit > max_fit:
-    #         max_fit, max_span = fit, span
-    #         print(f"{rep}: {fit} vs {max_fit} <- {max_span}")
-    #         # print(max_span.tree_str())
-    #         if max_fit > .99999: break
-    #     # print(f"{rep}: {fit} vs {max_fit} <- {span}, {max_span}")
+        print("\n********************** random sampling\n")
+        max_fit = -1
+        max_span = None
+        for rep in range(max_evals):
+            # span = SpanRule(None, None).sprout(term_prob=np.random.rand(), max_depth=6)
+            span = guide.sprout(SpanRule, Vector, term_prob=np.random.rand(), max_depth=6)
+            fit = fitness_function(span)
+            if fit > max_fit:
+                max_fit, max_span = fit, span
+                print(f"{rep}: {fit} vs {max_fit} <- {max_span}")
+                # print(max_span.tree_str())
+                if max_fit > .99999: break
+            # print(f"{rep}: {fit} vs {max_fit} <- {span}, {max_span}")
 
-    print("\n********************** repeated greedy\n")
-    max_fit = -1
-    max_span = None
-    num_evals = 0
-    num_sprouts = 0
-    while num_evals < max_evals:
-        num_sprouts += 1
-        if do_perceptron:
-            # span = SpanRule(None, None).sprout(term_prob=np.random.rand(), max_depth=np.random.randint(1,6+1))
-            span = guide.sprout(SpanRule, Vector, term_prob=np.random.rand(), max_depth=np.random.randint(1,6+1))
-            span, fit, num_itrs, explored = greedy(guide, span, fitness_function, max_depth=6, max_itrs=100)
-            # # check that final performance always better for queued, greedy is a special case
-            # spanq, fitq, num_itrsq, exploredq = queued(guide, span, fitness_function, max_depth=6, max_itrs=30, max_queue=500)
-            # print(f"{fit:.4f} vs {fitq:.4f}, {num_itrs} vs {num_itrsq}, {len(explored)} vs {len(exploredq)}")
-        else:
-            # span = SpanRule(None, None).sprout(term_prob=np.random.rand(), max_depth=np.random.randint(1,8+1))
-            span = guide.sprout(SpanRule, Vector, term_prob=np.random.rand(), max_depth=np.random.randint(1,10+1))
-            span, fit, num_itrs, explored = greedy(guide, span, fitness_function, max_depth=10, max_itrs=500)
-        num_evals += len(explored)
-        if fit > max_fit:
-            max_fit, max_span = fit, span
-            print(f"{num_sprouts} sprouts {num_evals} evals ({num_itrs} itrs|{len(explored)} eval'd): {max_fit:.4f} <- {max_span}")
-            # print(max_span.tree_str())
-            if max_fit > .99999: break
+    if do_greedy:    
 
-    # print("\n********************** repeated queued\n")
-    # max_fit = -1
-    # max_span = None
-    # num_evals = 0
-    # num_sprouts = 0
-    # while num_evals < max_evals:
-    #     num_sprouts += 1
-    #     if do_perceptron:
-    #         # span = SpanRule(None, None).sprout(term_prob=np.random.rand(), max_depth=np.random.randint(1,6+1))
-    #         span = guide.sprout(SpanRule, Vector, term_prob=np.random.rand(), max_depth=np.random.randint(1,6+1))
-    #         span, fit, num_itrs, explored = queued(guide, span, fitness_function, max_depth=6, max_itrs=100, max_queue=1000)
-    #     else:
-    #         # span = SpanRule(None, None).sprout(term_prob=np.random.rand(), max_depth=np.random.randint(1,8+1))
-    #         span = guide.sprout(SpanRule, Vector, term_prob=np.random.rand(), max_depth=np.random.randint(1,8+1))
-    #         span, fit, num_itrs, explored = queued(guide, span, fitness_function, max_depth=8, max_itrs=500, max_queue=1000)
-    #     # print(f"{num_evals} evals ({num_itrs} itrs|{len(explored)} eval'd): {max_fit:.4f} vs {fit:.4f} <- {span}")
-    #     num_evals += len(explored)
-    #     if fit > max_fit:
-    #         max_fit, max_span = fit, span
-    #         print(f"{num_sprouts} sprouts {num_evals} evals ({num_itrs} itrs|{len(explored)} eval'd): {max_fit} <- {max_span}")
-    #         # print(max_span.tree_str())
-    #         if max_fit > .99999: break
+        print("\n********************** repeated greedy\n")
+        max_fit = -1
+        max_span = None
+        num_evals = 0
+        num_sprouts = 0
+        results = []
+        while num_evals < max_evals:
+            num_sprouts += 1
+            if do_perceptron:
+                # span = SpanRule(None, None).sprout(term_prob=np.random.rand(), max_depth=np.random.randint(1,6+1))
+                span = guide.sprout(SpanRule, Vector, term_prob=np.random.rand(), max_depth=np.random.randint(1,6+1))
+                span, fit, num_itrs, explored = greedy(guide, span, fitness_function, max_depth=6, max_itrs=100)
+                # # check that final performance always better for queued, greedy is a special case
+                # spanq, fitq, num_itrsq, exploredq = queued(guide, span, fitness_function, max_depth=6, max_itrs=30, max_queue=500)
+                # print(f"{fit:.4f} vs {fitq:.4f}, {num_itrs} vs {num_itrsq}, {len(explored)} vs {len(exploredq)}")
+            else:
+                # span = SpanRule(None, None).sprout(term_prob=np.random.rand(), max_depth=np.random.randint(1,8+1))
+                span = guide.sprout(SpanRule, Vector, term_prob=np.random.rand(), max_depth=np.random.randint(1,10+1))
+                span, fit, num_itrs, explored = greedy(guide, span, fitness_function, max_depth=10, max_itrs=500)
+            num_evals += len(explored)
+            if fit > max_fit:
+                max_fit, max_span = fit, span
+                print(f"{num_sprouts} sprouts {num_evals} evals ({num_itrs} itrs|{len(explored)} eval'd): {max_fit:.4f} <- {max_span}")
+                # print(max_span.tree_str())
+                results.append((num_sprouts, num_evals, max_fit, max_span))
+                with open("grambump_greedy.pkl", "wb") as f: pk.dump(results, f)
+                if max_fit > .99999: break
 
+    if do_queued:
+    
+        print("\n********************** repeated queued\n")
+        max_fit = -1
+        max_span = None
+        num_evals = 0
+        num_sprouts = 0
+        results = []
+        while num_evals < max_evals:
+            num_sprouts += 1
+            if do_perceptron:
+                # span = SpanRule(None, None).sprout(term_prob=np.random.rand(), max_depth=np.random.randint(1,6+1))
+                span = guide.sprout(SpanRule, Vector, term_prob=np.random.rand(), max_depth=np.random.randint(1,6+1))
+                span, fit, num_itrs, explored = queued(guide, span, fitness_function, max_depth=6, max_itrs=100, max_queue=1000)
+            else:
+                # span = SpanRule(None, None).sprout(term_prob=np.random.rand(), max_depth=np.random.randint(1,8+1))
+                span = guide.sprout(SpanRule, Vector, term_prob=np.random.rand(), max_depth=np.random.randint(1,8+1))
+                span, fit, num_itrs, explored = queued(guide, span, fitness_function, max_depth=8, max_itrs=1000, max_queue=2000)
+            # print(f"{num_evals} evals ({num_itrs} itrs|{len(explored)} eval'd): {max_fit:.4f} vs {fit:.4f} <- {span}")
+            num_evals += len(explored)
+            if fit > max_fit:
+                max_fit, max_span = fit, span
+                print(f"{num_sprouts} sprouts {num_evals} evals ({num_itrs} itrs|{len(explored)} eval'd): {max_fit} <- {max_span}")
+                # print(max_span.tree_str())
+                results.append((num_sprouts, num_evals, max_fit, max_span))
+                with open("grambump_queued.pkl", "wb") as f: pk.dump(results, f)
+                if max_fit > .99999: break
 
+    if do_show:
+        import matplotlib.pyplot as pt
 
-    # w = Variable(Vector, "w")
-    # y = Variable(Scalar, "y")
-    # c = Constant(Scalar, 1)
+        results = {}
+        for key in ("greedy", "queued"):
+            try:
+                with open(f"grambump_{key}.pkl", "rb") as f: results[key] = pk.load(f)
+            except:
+                pass # didn't run that experiment yet
 
-    # print(w, y, c)
-    # print(inputs["w"])
-    # print(w(inputs))
-
-
+        pt.figure()
+        for key in results:
+            print(key)
+            num_sprouts, num_evals, max_fit, max_span = zip(*results[key])
+            pt.plot(num_evals, max_fit, 'o-', label=key)
+            print(f"best fit {key}: {max_span}")
+        pt.legend()
+        pt.show()
