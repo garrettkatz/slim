@@ -46,6 +46,54 @@ class Node:
         if type(other) in (int, float): return Constant(other)
         return other
 
+    def match(self, pattern, matches=None):
+
+        # initialize match dict at top-level call
+        if matches is None: matches = {}
+
+        # output types must be compatible for match
+        if not issubclass(self.out_type, pattern.out_type): return False, {}
+
+        # unbound parameters with same output type are always matched
+        if type(pattern) == Parameter:
+            # check for already bound to different formula
+            if pattern.value in matches and matches[pattern.value] != self: return False, {}
+            # unbound or identical
+            matches[pattern.value] = self
+            return True, matches
+
+        # otherwise, formula types must match
+        if type(self) != type(pattern): return False, {}
+
+        # if terminal, value must also match
+        if isinstance(self, Terminal):
+            return (self.value == pattern.value), matches
+
+        # recursive case, collect matches
+        for arg, pat in zip(self.args, pattern.args):
+            status, matches = arg.match(pat, matches)
+            if status == False: return False, {}
+
+        return True, matches
+
+    def substitute(self, matches):
+        # matches[n] is substitution for parameter n
+
+        # base case: replace parameter with its match
+        if type(self) == Parameter:
+            if self.value not in matches: print(self, matches)
+            return matches[self.value]
+
+        # base case: terminals have no args
+        if isinstance(self, Terminal): return self
+
+        # recursive case: return a copy with substituted args
+        args = tuple(arg.substitute(matches) for arg in self.args)
+        return type(self)(*args, out_type=self.out_type)
+
+    def __neg__(self):
+        return Neg(self, out_type=self.out_type)
+
     def __add__(self, other):
         other = self.promote(other)
         return Add(self, other, out_type=self.binary_out_type(other))
@@ -57,6 +105,28 @@ class Node:
     def __mul__(self, other):
         other = self.promote(other)
         return Mul(self, other, out_type=self.binary_out_type(other))
+
+    def __truediv__(self, other):
+        other = self.promote(other)
+        return Mul(self, Inv(other), out_type=self.binary_out_type(other))
+
+    def lump_constants(self):
+        # subclasses which can have constant args but non-constant output must override this method
+
+        if isinstance(self, Terminal): return self
+
+        args = tuple(arg.lump_constants() for arg in self.args)
+        lumped = type(self)(*args, out_type=self.out_type)
+
+        if all(isinstance(arg, Constant) for arg in args):
+            # value = lumped(None) # evaluate lumped with null input since all constant
+            try: # defensive
+                value = lumped(None) # evaluate lumped with null input since all constant
+            except:
+                raise TypeError(f"non-Variable {type(self)} accesses input, must override lump_constants")
+            return Constant(value.item())
+        else:
+            return lumped
 
 class Terminal(Node):
     def __init__(self, value, out_type=Output):
@@ -107,8 +177,8 @@ class Operator(Node):
                 op = random_operator(out_type, prohibit)
                 args.append(op(out_type=out_type).sprout(term_prob, max_depth-1))
 
-        # return a copy
-        return type(self)(*args, out_type=self.out_type)
+        # return a copy with lumped constants
+        return type(self)(*args, out_type=self.out_type).lump_constants()
 
 # parameter placeholder in patterns
 class Parameter(Terminal):
@@ -158,51 +228,6 @@ class Guide:
         # return new object
         return op_cls(*args, out_type=out_type)
 
-    def match(self, formula, pattern, matches=None):
-
-        # initialize match dict at top-level call
-        if matches is None: matches = {}
-
-        # output types must be compatible for match
-        if not issubclass(formula.out_type, pattern.out_type): return False, {}
-
-        # unbound parameters with same output type are always matched
-        if type(pattern) == Parameter:
-            # check for already bound to different formula
-            if pattern.value in matches and matches[pattern.value] != formula: return False, {}
-            # unbound or identical
-            matches[pattern.value] = formula
-            return True, matches
-
-        # otherwise, formula types must match
-        if type(formula) != type(pattern): return False, {}
-
-        # if terminal, value must also match
-        if isinstance(formula, Terminal):
-            return (formula.value == pattern.value), matches
-
-        # recursive case, collect matches
-        for arg, pat in zip(formula.args, pattern.args):
-            status, matches = self.match(arg, pat, matches)
-            if status == False: return False, {}
-
-        return True, matches
-
-    def substitute(self, pattern, matches):
-        # matches[n] is substitution for parameter n
-
-        # base case: replace parameter with its match
-        if type(pattern) == Parameter:
-            if pattern.value not in matches: print(pattern, matches)
-            return matches[pattern.value]
-
-        # base case: terminals have no args
-        if isinstance(pattern, Terminal): return pattern
-
-        # recursive case: return a copy with substituted args
-        args = tuple(self.substitute(arg, matches) for arg in pattern.args)
-        return type(pattern)(*args, out_type=pattern.out_type)
-
     def neighbors(self, formula):
 
         # recursively collect neighbors of sub-trees
@@ -218,16 +243,19 @@ class Guide:
 
             # find matching patterns if any
             for match_idx, pattern in enumerate(patterns):
-                success, matches = self.match(formula, pattern)
+                success, matches = formula.match(pattern)
                 if not success: continue
 
                 # if this code is reached there was a match at match_idx
                 alternates = patterns[:match_idx] + patterns[match_idx+1:]
                 for alternate in alternates:
-                    neighbor = self.substitute(alternate, matches)
+                    neighbor = alternate.substitute(matches)
                     # enforce out type
                     if issubclass(neighbor.out_type, formula.out_type):
                         result.append(neighbor)
+
+        # lump all constants to reduce tree sizes
+        result = [neighbor.lump_constants() for neighbor in result]
 
         return result
 
@@ -363,12 +391,54 @@ class Add(ElementwiseBinary):
         return self.args[0](inputs) + self.args[1](inputs)
     def __str__(self):
         return f"({self.args[0]} + {self.args[1]})"
+    def lump_constants(self):
+        node = super().lump_constants()
+        if isinstance(node, Constant): return node
+
+        if node.args[0] == Constant(0): return node.args[1]
+        if node.args[1] == Constant(0): return node.args[0]        
+
+        if tuple(map(type, node.args)) == (Constant, Add):
+            if isinstance(node.args[1].args[0], Constant):
+                return node.args[1].args[1] + (node.args[0].value + node.args[1].args[0].value)
+            if isinstance(node.args[1].args[1], Constant):
+                return node.args[1].args[0] + (node.args[0].value + node.args[1].args[1].value)
+
+        if tuple(map(type, node.args)) == (Add, Constant):
+            if isinstance(node.args[0].args[0], Constant):
+                return node.args[0].args[1] + (node.args[1].value + node.args[0].args[0].value)
+            if isinstance(node.args[0].args[1], Constant):
+                return node.args[0].args[0] + (node.args[1].value + node.args[0].args[1].value)
+
+        return node
 
 class Mul(ElementwiseBinary):
     def __call__(self, inputs):
         return self.args[0](inputs) * self.args[1](inputs)
     def __str__(self):
         return f"({self.args[0]} * {self.args[1]})"
+    def lump_constants(self):
+        node = super().lump_constants()
+        if isinstance(node, Constant): return node
+
+        if Constant(0) in node.args: return Constant(0)
+        if node.args[0] == Constant(1): return node.args[1]
+        if node.args[1] == Constant(1): return node.args[0]        
+
+        if tuple(map(type, node.args)) == (Constant, Mul):
+            if isinstance(node.args[1].args[0], Constant):
+                return node.args[1].args[1] * (node.args[0].value * node.args[1].args[0].value)
+            if isinstance(node.args[1].args[1], Constant):
+                return node.args[1].args[0] * (node.args[0].value * node.args[1].args[1].value)
+
+        if tuple(map(type, node.args)) == (Mul, Constant):
+            if isinstance(node.args[0].args[0], Constant):
+                return node.args[0].args[1] * (node.args[1].value * node.args[0].args[0].value)
+            if isinstance(node.args[0].args[1], Constant):
+                return node.args[0].args[0] * (node.args[1].value * node.args[0].args[1].value)
+
+        return node
+
 
 class Min(ElementwiseBinary):
     def __call__(self, inputs):
@@ -392,6 +462,45 @@ class Dot(Operator):
     def __str__(self):
         return f"({self.args[0]} . {self.args[1]})"
 
+class WhereLargest(Operator):
+    def __init__(self, rank, result, out_type=Scalar):
+        super().__init__(rank, result, out_type=Scalar)
+    def random_arg_types(out_type):
+        return (Vector, Vector)
+    def __call__(self, inputs):
+        assert self.args[0].out_type is Vector
+        assert self.args[0](inputs).shape[1] > 1
+        idx = self.args[0](inputs).argmax(axis=1, keepdims=True)
+        return np.take_along_axis(self.args[1](inputs), idx, axis=1)
+    def __str__(self):
+        return f"({self.args[1]}[argmax {self.args[0]}])"
+
+class WherePositive(Operator):
+    def __init__(self, indicator, positive, negative, out_type=Output):
+        # coerce out_type based on arg_types
+        out_types = (indicator.out_type, positive.out_type, negative.out_type)
+        if out_types[0] == out_types[1] == out_types[2] == Scalar: out_type = Scalar
+        elif Vector in out_types: out_type = Vector
+        super().__init__(indicator, positive, negative, out_type=out_type)
+    def random_arg_types(out_type):
+        choices = [
+            (Scalar, Scalar, Scalar),
+            (Scalar, Scalar, Vector),
+            (Scalar, Vector, Scalar),
+            (Scalar, Vector, Vector),
+            (Vector, Scalar, Scalar),
+            (Vector, Scalar, Vector),
+            (Vector, Vector, Scalar),
+            (Vector, Vector, Vector),
+        ]
+        if out_type is Scalar: return choices[0]
+        if out_type is Vector: return choices[np.random.randint(1, 8)]
+        return (Output, Output, Output)
+    def __call__(self, inputs):
+        return np.where(self.args[0](inputs) > 0, self.args[1](inputs), self.args[2](inputs))
+    def __str__(self):
+        return f"where({self.args[0]} > 0, {self.args[1].strip()}, {self.args[2].strip()})"
+
 class SpanRule(Operator):
     def __init__(self, alpha, beta, out_type=Vector):
         super().__init__(alpha, beta, out_type=Vector)
@@ -401,6 +510,9 @@ class SpanRule(Operator):
         return self.args[0](inputs) * inputs["w"] + self.args[1](inputs) * inputs["x"]
     def __str__(self):
         return f"{self.args[0]}*w + {self.args[1]}*x"
+    def lump_constants(self):
+        args = tuple(arg.lump_constants() for arg in self.args)
+        return SpanRule(*args)
 
 def greedy(guide, form, fit_fun, max_depth, max_itrs):
     fitness = fit_fun(form)
@@ -471,18 +583,21 @@ def queued(guide, form, fit_fun, max_depth, max_itrs, max_queue, fit_target=.999
 
 if __name__ == "__main__":
 
+    import sys
+    tag = sys.argv[1] # used for saving results
+
     import pickle as pk
     from geneng import load_data
 
     do_perceptron = False
 
     do_random = False
-    do_greedy = False
-    do_queued = True
+    do_greedy = True
+    do_queued = False
     do_show = False
 
-    # max_evals = 50_000
-    max_evals = 1_000_000_000
+    max_evals = 50_000
+    # max_evals = 1_000_000_000
 
     dataset = load_data(Ns=[3,4], perceptron=do_perceptron)
     # dataset[n]: [w_old, x, y, w_new, margins]
@@ -521,8 +636,8 @@ if __name__ == "__main__":
     else:
         constants = tuple(Constant(v, Scalar) for v in range(-1,2))
         operators = { # out_type: classes
-            Output: (Sign, Abs, Neg, Inv, Sqrt, Log, Exp, Add, Mul, Min, Max), #, Square) leave out redundancies
-            Scalar: (Sum, Prod, Least, Largest) #, Mean, Dot) leave out redundancies
+            Output: (Sign, Abs, Neg, Inv, Sqrt, Square, Log, Exp, Add, Mul, Min, Max, WherePositive),
+            Scalar: (Sum, Prod, Least, Largest, Mean, Dot, WhereLargest),
         }
     
     # all patterns in a group must contain the same parameters
@@ -593,7 +708,7 @@ if __name__ == "__main__":
     print('rand span', span)
 
     mul = w * x
-    success, match = guide.match(mul, neighborhoods[0][0])
+    success, match = mul.match(neighborhoods[0][0])
     print('success, match')
     print(success, match)
 
@@ -608,7 +723,7 @@ if __name__ == "__main__":
     abs2 = Abs(Constant(2))
     print(f"abs2 {abs2} fitness = {fitness_function(abs2)}")
 
-    # success, match = guide.match(mul, neighborhoods[1][0])
+    # success, match = mul.match(neighborhoods[1][0])
     # print('success, match')
     # print(success, match)
 
@@ -651,14 +766,12 @@ if __name__ == "__main__":
         while num_evals < max_evals:
             num_sprouts += 1
             if do_perceptron:
-                # span = SpanRule(None, None).sprout(term_prob=np.random.rand(), max_depth=np.random.randint(1,6+1))
                 span = guide.sprout(SpanRule, Vector, term_prob=np.random.rand(), max_depth=np.random.randint(1,6+1))
                 span, fit, num_itrs, explored = greedy(guide, span, fitness_function, max_depth=6, max_itrs=100)
                 # # check that final performance always better for queued, greedy is a special case
                 # spanq, fitq, num_itrsq, exploredq = queued(guide, span, fitness_function, max_depth=6, max_itrs=30, max_queue=500)
                 # print(f"{fit:.4f} vs {fitq:.4f}, {num_itrs} vs {num_itrsq}, {len(explored)} vs {len(exploredq)}")
             else:
-                # span = SpanRule(None, None).sprout(term_prob=np.random.rand(), max_depth=np.random.randint(1,8+1))
                 span = guide.sprout(SpanRule, Vector, term_prob=np.random.rand(), max_depth=np.random.randint(1,10+1))
                 span, fit, num_itrs, explored = greedy(guide, span, fitness_function, max_depth=10, max_itrs=500)
             num_evals += len(explored)
@@ -667,7 +780,7 @@ if __name__ == "__main__":
                 print(f"{num_sprouts} sprouts {num_evals} evals ({num_itrs} itrs|{len(explored)} eval'd): {max_fit:.4f} <- {max_span}")
                 # print(max_span.tree_str())
                 results.append((num_sprouts, num_evals, max_fit, max_span))
-                with open("grambump_greedy.pkl", "wb") as f: pk.dump(results, f)
+                with open(f"grambump_greedy_{tag}.pkl", "wb") as f: pk.dump(results, f)
                 if max_fit > .99999: break
 
     if do_queued:
@@ -681,11 +794,9 @@ if __name__ == "__main__":
         while num_evals < max_evals:
             num_sprouts += 1
             if do_perceptron:
-                # span = SpanRule(None, None).sprout(term_prob=np.random.rand(), max_depth=np.random.randint(1,6+1))
                 span = guide.sprout(SpanRule, Vector, term_prob=np.random.rand(), max_depth=np.random.randint(1,6+1))
                 span, fit, num_itrs, explored = queued(guide, span, fitness_function, max_depth=6, max_itrs=100, max_queue=1000)
             else:
-                # span = SpanRule(None, None).sprout(term_prob=np.random.rand(), max_depth=np.random.randint(1,8+1))
                 span = guide.sprout(SpanRule, Vector, term_prob=np.random.rand(), max_depth=np.random.randint(1,8+1))
                 span, fit, num_itrs, explored = queued(guide, span, fitness_function, max_depth=8, max_itrs=1000, max_queue=2000)
             # print(f"{num_evals} evals ({num_itrs} itrs|{len(explored)} eval'd): {max_fit:.4f} vs {fit:.4f} <- {span}")
@@ -695,7 +806,7 @@ if __name__ == "__main__":
                 print(f"{num_sprouts} sprouts {num_evals} evals ({num_itrs} itrs|{len(explored)} eval'd): {max_fit} <- {max_span}")
                 # print(max_span.tree_str())
                 results.append((num_sprouts, num_evals, max_fit, max_span))
-                with open("grambump_queued.pkl", "wb") as f: pk.dump(results, f)
+                with open(f"grambump_queued_{tag}.pkl", "wb") as f: pk.dump(results, f)
                 if max_fit > .99999: break
 
     if do_show:
@@ -704,7 +815,7 @@ if __name__ == "__main__":
         results = {}
         for key in ("greedy", "queued"):
             try:
-                with open(f"grambump_{key}.pkl", "rb") as f: results[key] = pk.load(f)
+                with open(f"grambump_{key}_{tag}.pkl", "rb") as f: results[key] = pk.load(f)
             except:
                 pass # didn't run that experiment yet
 
