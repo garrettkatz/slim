@@ -375,6 +375,7 @@ class Largest(ReducerUnary):
 
 class ElementwiseBinary(Operator):
     def __init__(self, arg0, arg1, out_type=Output):
+        arg0, arg1 = self.promote(arg0), self.promote(arg1) # wrap constants
         # coerce out_type based on arg_types
         if arg0.out_type == arg1.out_type == Scalar: out_type = Scalar
         elif Vector in (arg0.out_type, arg1.out_type): out_type = Vector
@@ -421,7 +422,11 @@ class Mul(ElementwiseBinary):
         node = super().lump_constants()
         if isinstance(node, Constant): return node
 
-        if Constant(0) in node.args: return Constant(0)
+        # if Constant(0) in node.args: return Constant(0) # can collapse vectors to scalars
+        # leave vectors unlumped
+        if node.args[0] == Constant(0) and node.args[1].out_type is Scalar: return Constant(0)
+        if node.args[1] == Constant(0) and node.args[0].out_type is Scalar: return Constant(0)
+
         if node.args[0] == Constant(1): return node.args[1]
         if node.args[1] == Constant(1): return node.args[0]        
 

@@ -75,50 +75,68 @@ P = tuple(Parameter(n) for n in range(3))
 
 # )
 
-# conservative: should be identical or very small deviation
-neighborhoods = (
+# conservative: should very small deviation
+conservative = (
+
     # terminals
     # (w, Max(w, x), Max(w, y), Abs(x) * Mean(w), ),
     (x, ),
     # (y, Min(y, Sum(w)), ),
-    # (N, Constant(3), Constant(4), Largest(w), Sum(Abs(x)), ),
+    (N, Constant(3), Constant(4), ),
 
-    # # # unaries
-    # (Sign(P[0]), Sqrt(P[0]) * Sign(P[0]), Log(Abs(P[0]) + 1) * Sign(P[0]), ),
-    # (Inv(P[0]), Sign(P[0]) * Exp(Abs(Neg(P[0]) - 1)), Sign(P[0]) * Max(Neg(Abs(P[0])) + 2, Constant(0)), ),
-    # (Square(P[0]), P[0] * P[0], Min(Square(P[0]), Abs(Square(P[0]) * P[0])), ),
+    # # unaries
+    (Sign(P[0]), Min(1, Sqrt(P[0])) * Sign(P[0]), ),
+    (Inv(P[0]), ),
+    # (Inv(P[0]), Max(Inv(P[0]), Sign(P[0]) * Exp(-Abs(P[0] - 1))), ), #Sign(P[0]) * Max(-Abs(P[0]) + 2, 0), ),
+    (Square(P[0]), Min(Square(P[0]), Abs(Square(P[0]) * P[0])), ),
+    (Abs(P[0]), P[0] * Sign(P[0]), ),
     # (Abs(P[0]), Max(Abs(P[0]), Sqrt(P[0])), Min(Abs(P[0]), Square(P[0])), ),
-    # (Sqrt(P[0]), Min(Sqrt(P[0]), Abs(P[0])), ),
+    (Sqrt(P[0]), ), #Min(Sqrt(P[0]), Abs(P[0])), ),
     # (Log(P[0]), Sqrt(P[0]) - 1, ),
-
     # (Exp(P[0]), Max(P[0] + 1, Constant(0)), Max(Sign(P[0] + 1) * (P[0] + 1) * (P[0] + 1), Constant(0)), ),
+    (Sum(P[0]), (Least(P[0]) + Largest(P[0])) * N / 2, ),
     # (Sum(P[0]), Sum(P[0] * y), Sum(P[0] * x), (Least(P[0]) + Largest(P[0])) * Inv(Constant(2)) * N, ),
     # (Prod(P[0]), Prod(Sign(P[0])), ),
-    # # (Mean(P[0]), (Least(P[0]) + Largest(P[0])) * Inv(Constant(2)), ), # omit redundancies
+    (Mean(P[0]), Sum(P[0]) / N, (Least(P[0]) + Largest(P[0])) / 2, ), # omit redundancies
     # (Least(P[0]), Least(Sign(P[0])), ),
     # (Largest(P[0]), Largest(Sign(P[0])), ),
 
-    # # binaries
-    # (P[0] + P[1], Max(P[0], P[1]) * 2, Min(P[0], P[1]) * 2, ),
-    # (P[0] * P[1], Min(P[0] * P[0], P[1] * P[1]) * Sign(P[0] * P[1]), ),
+    # binaries
+    (P[0] + P[1], ), # Max(P[0], P[1]) * 2, Min(P[0], P[1]) * 2, ),
+    (P[0] * P[1], Min(Square(P[0]), Square(P[1])) * Sign(P[0] * P[1]), ),
     # (P[0] * P[0], Exp(Abs(P[0])) - 1, ),
     # (Min(P[0], P[1]), (P[0] + P[1]) * Inv(Constant(2)), ),
+    (Min(P[0], P[1]), Sqrt(P[0] * P[1]) * Sign(P[0] * P[1])),
     # (Max(P[0], P[1]), (P[0] + P[1]) * Inv(Constant(2)), ),
-    # # (Dot(P[0], P[1]), Least(P[0] * P[1]) + Largest(P[0] * P[1]), ), # leave out until simplifications
+    # (Dot(P[0], P[1]), Least(P[0] * P[1]) + Largest(P[0] * P[1]), ), # leave out until simplifications
 
-    # # open-ended
-    # (P[0], P[0] + y / N, P[0] + x / N, P[0] + Inv(N), P[0] - Inv(N), P[0] + Exp(-Abs(x)) / N,  P[0] + Inv(Abs(x)+1) / N, ),
+    # wheres
+    (WhereLargest(P[0], P[1]), ),
+    (WherePositive(P[0], P[1], P[2]), ((Sign(P[0]) + 1) / 2) * P[1] + ((Sign(-P[0]) + 1) / 2) * P[2], ),
 
-    # identities
-    (w, Abs(x)*w, ),
-    (x, Abs(x)*x, ),
-    (P[0], Abs(y)*P[0], Sign(N)*P[0], Sign(P[0])*Sqrt(Square(P[0])), ),
-    (P[0]*P[0], Square(P[0]), ),
-    (P[0]*(P[1] + P[2]), (P[0]*P[1]) + (P[0]*P[2]), ),
+    # open-ended
+    (P[0], P[0] + (y / N), P[0] + (x / N), P[0] + Inv(N), P[0] - Inv(N), P[0] + (Exp(-Abs(x)) / N),  P[0] + (Inv(Abs(x) + 1) / N), ),
 
 )
 
-guide = Guide(constants + variables, operators, neighborhoods)
+# should be zero deviation
+identities = (
+    (w, Abs(x)*w, ),
+    (x, Abs(x)*x, ),
+    (Sum(P[0]), Mean(P[0]) * N, Log(Prod(Exp(P[0]))), ),
+    (Prod(P[0]), Exp(Sum(Log(P[0]))), ),
+    (P[0], Abs(y)*P[0], Sign(N)*P[0], Sign(P[0])*Sqrt(Square(P[0])), ),
+    (P[0]*P[0], Square(P[0]), ),
+    (P[0]*(P[1] + P[2]), (P[0]*P[1]) + (P[0]*P[2]), ),
+    (Log(P[0] * P[1]), Log(P[0]) + Log(P[1]), ),
+    (Exp(P[0] + P[1]), Exp(P[0]) * Exp(P[1]), ),
+    (Dot(P[0], P[1]), Sum(P[0] * P[1]), ),
+    (Least(P[0]), WhereLargest(-P[0], P[0]), ),
+    (Largest(P[0]), WhereLargest(P[0], P[0]), ),
+    (Max(P[0], P[1]), -Min(-P[0], -P[1]), ),
+)
+
+guide = Guide(constants + variables, operators, neighborhoods=conservative)
 
 # print(guide.neighbors(x))
 # input('.')
