@@ -187,6 +187,8 @@ def read_parser():
     # parser.add_argument("--rand_seed", type=int, default=123456)
     parser.add_argument("--target_fitness", type=float, default=0.999999)
     parser.add_argument("--parallel_eval", action="store_true")
+    parser.add_argument("--crossover_rate", type=float, default=0.9)
+    parser.add_argument("--mutation_rate", type=float, default=0.01)
 
     config = parser.parse_args()
     return config
@@ -241,8 +243,8 @@ if __name__ == "__main__":
     alg = SimpleGP(
         grammar,
         problem=prob,
-        # probability_crossover=0.4,
-        # probability_mutation=0.4,
+        probability_crossover=config.crossover_rate,
+        probability_mutation=config.mutation_rate,
         number_of_generations=config.number_of_generations,
         max_depth=config.max_depth,
         population_size=config.population_size,
