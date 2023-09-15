@@ -50,7 +50,7 @@ def queued(guide, form, fit_fun, max_depth, max_itrs, max_queue, fit_target=.999
             nf = fit_fun(neighbor)
             explored[ns] = nf
 
-            print(f"   {itr} :: {len(queue)} :: {len(explored)} :: {max_fit:.6f} vs {nf:.6f} {neighbor}")
+            # print(f"   {itr} :: {len(queue)} :: {len(explored)} :: {max_fit:.6f} vs {nf:.6f} {neighbor}")
 
             # track best found so far
             if nf > max_fit: max_form, max_fit = neighbor, nf
@@ -195,6 +195,8 @@ if __name__ == "__main__":
     from geneng import load_data
 
     do_perceptron = True
+    do_spanrule = False
+    max_depth = 6 if do_perceptron and do_spanrule else 10
 
     do_random = False
     do_greedy = True
@@ -202,8 +204,8 @@ if __name__ == "__main__":
     do_multi = False
     do_show = False
 
-    max_evals = 500_000
-    # max_evals = 1_000_000_000
+    # max_evals = 500_000
+    max_evals = 1_000_000_000
 
     dataset = load_data(Ns=[3,4], perceptron=do_perceptron)
     # dataset[n]: [w_old, x, y, w_new, margins]
@@ -257,7 +259,6 @@ if __name__ == "__main__":
         max_fit = -1
         max_span = None
         for rep in range(max_evals):
-            # span = SpanRule(None, None).sprout(term_prob=np.random.rand(), max_depth=6)
             span = guide.sprout(SpanRule, Vector, term_prob=np.random.rand(), max_depth=6)
             fit = fitness_function(span)
             if fit > max_fit:
@@ -271,29 +272,30 @@ if __name__ == "__main__":
 
         print("\n********************** repeated greedy\n")
         max_fit = -1
-        max_span = None
+        max_form = None
         num_evals = 0
         num_sprouts = 0
         results = []
         while num_evals < max_evals:
             num_sprouts += 1
-            if do_perceptron:
-                span = guide.sprout(SpanRule, Vector, term_prob=np.random.rand(), max_depth=np.random.randint(1,6+1))
-                span, fit, num_itrs, explored = greedy(guide, span, fitness_function, max_depth=6, max_itrs=100)
-                # # check that final performance always better for queued, greedy is a special case
-                # spanq, fitq, num_itrsq, exploredq = queued(guide, span, fitness_function, max_depth=6, max_itrs=30, max_queue=500)
-                # print(f"{fit:.4f} vs {fitq:.4f}, {num_itrs} vs {num_itrsq}, {len(explored)} vs {len(exploredq)}")
-            else:
-                span = guide.sprout(SpanRule, Vector, term_prob=np.random.rand(), max_depth=np.random.randint(1,10+1))
-                span, fit, num_itrs, explored = greedy(guide, span, fitness_function, max_depth=10, max_itrs=500)
+
+            op_cls = SpanRule if do_spanrule else np.random.choice(operators[Output])
+            form = guide.sprout(op_cls, Vector, term_prob=np.random.rand(), max_depth=np.random.randint(1,max_depth+1))
+            form, fit, num_itrs, explored = greedy(guide, form, fitness_function, max_depth=max_depth, max_itrs=500)
+
+            # # check that final performance always better for queued, greedy is a special case
+            # formq, fitq, num_itrsq, exploredq = queued(guide, form, fitness_function, max_depth=max_depth, max_itrs=30, max_queue=500)
+            # print(f"{fit:.4f} vs {fitq:.4f}, {num_itrs} vs {num_itrsq}, {len(explored)} vs {len(exploredq)}")
+
             num_evals += len(explored)
             if fit > max_fit:
-                max_fit, max_span = fit, span
-                # print(f"{num_sprouts} sprouts {num_evals} evals ({num_itrs} itrs|{len(explored)} eval'd): {max_fit:.4f} <- {max_span}")
-                # print(max_span.tree_str())
-                results.append((num_sprouts, num_evals, max_fit, max_span))
+                form = form.lump_constants()
+                max_fit, max_form = fit, form
+                # print(f"{num_sprouts} sprouts {num_evals} evals ({num_itrs} itrs|{len(explored)} eval'd): {max_fit:.4f} <- {max_form}")
+                # print(max_form.tree_str())
+                results.append((num_sprouts, num_evals, max_fit, max_form))
                 with open(f"grambump_greedy_{tag}.pkl", "wb") as f: pk.dump(results, f)
-            print(f"{num_sprouts} sprouts {num_evals} evals ({num_itrs:>2d} itrs|{len(explored):>3d} eval'd): {max_fit:.4f} ~ {max_span} vs {fit:.4f}")
+            print(f"{num_sprouts} sprouts {num_evals} evals ({num_itrs:>2d} itrs|{len(explored):>3d} eval'd): {max_fit:.4f} ~ {max_form} vs {fit:.4f}")
             if max_fit > .99999: break
 
     if do_queued:
