@@ -132,18 +132,20 @@ class Terminal(Node):
     def __init__(self, value, out_type=Output):
         super().__init__(out_type=out_type)
         self.value = value
-    def __str__(self):
-        return str(self.value)
 
 class Constant(Terminal):
     def __init__(self, value, out_type=Scalar):
         super().__init__(value, out_type=Scalar)
     def __call__(self, inputs):
         return np.array([[float(self.value)]])
+    def __str__(self):
+        return f"{self.value:.3f}" if type(self.value) == float else str(self.value)
 
 class Variable(Terminal): # value treated as variable name
     def __call__(self, inputs):
         return inputs[self.value] # look up variable value by name
+    def __str__(self):
+        return self.value
 
 # base class for non-terminals in expression trees
 class Operator(Node):
@@ -252,10 +254,11 @@ class Guide:
                     neighbor = alternate.substitute(matches)
                     # enforce out type
                     if issubclass(neighbor.out_type, formula.out_type):
-                        result.append(neighbor)
+                        result.append(neighbor) # don't lump at all
+                        # result.append(neighbor.lump_constants()) # only lump below a change
 
-        # lump all constants to reduce tree sizes
-        result = [neighbor.lump_constants() for neighbor in result]
+        # # lump all constants to reduce tree sizes? only alternatives need be lumped again
+        # result = [neighbor.lump_constants() for neighbor in result]
 
         return result
 
@@ -322,7 +325,7 @@ class Sqrt(ElementwiseUnary):
 class Log(ElementwiseUnary):
     def __call__(self, inputs):
         arg = self.args[0](inputs)
-        return np.log(np.fabs(arg), where=(arg != 0), out=np.zeros(arg.shape))
+        return np.log(np.fabs(arg), where=(np.fabs(arg) > np.exp(-10)), out=-10*np.ones(arg.shape))
     def __str__(self):
         return f"log(|{self.args[0].strip()}|)"
     def prohibited_arg_ops():
@@ -331,7 +334,7 @@ class Log(ElementwiseUnary):
 class Exp(ElementwiseUnary):
     def __call__(self, inputs):
         arg = self.args[0](inputs)
-        return np.exp(arg, where=(arg < 3), out=np.exp(3)*np.ones(arg.shape))
+        return np.exp(arg, where=(arg < 5), out=np.exp(5)*np.ones(arg.shape))
     def __str__(self):
         return f"exp({self.args[0].strip()})"
     def prohibited_arg_ops():
@@ -473,8 +476,6 @@ class WhereLargest(Operator):
     def random_arg_types(out_type):
         return (Vector, Vector)
     def __call__(self, inputs):
-        assert self.args[0].out_type is Vector
-        assert self.args[0](inputs).shape[1] > 1
         idx = self.args[0](inputs).argmax(axis=1, keepdims=True)
         return np.take_along_axis(self.args[1](inputs), idx, axis=1)
     def __str__(self):
@@ -519,90 +520,12 @@ class SpanRule(Operator):
         args = tuple(arg.lump_constants() for arg in self.args)
         return SpanRule(*args)
 
-def greedy(guide, form, fit_fun, max_depth, max_itrs):
-    fitness = fit_fun(form)
-    explored = {}
-    for itr in range(max_itrs):
-
-        improved = False
-        for neighbor in guide.neighbors(form):
-            ns = str(neighbor)
-            if ns in explored: continue
-
-            nf = fit_fun(neighbor)
-            explored[ns] = nf
-
-            if neighbor.depth() > max_depth: continue
-
-            if nf > fitness:
-                form = neighbor
-                fitness = nf
-                improved = True
-
-        if not improved: break
-
-    return form, fitness, itr+1, explored
-
-from heapq import heappop, heappush
-
-def queued(guide, form, fit_fun, max_depth, max_itrs, max_queue, fit_target=.9999):
-    max_form, max_fit = form, fit_fun(form)
-    queue = [(-max_fit, 0, max_form)] # min heap
-    push_order = 1 # break ties with FIFO
-    explored = {}
-    for itr in range(max_itrs):
-        # stop if queue is exhausted
-        if len(queue) == 0: break
-
-        # pop best formula so far
-        _, _, form = heappop(queue)
-
-        # check its neighbors
-        for neighbor in guide.neighbors(form):
-
-            # skip neighbor if already explored/pushed
-            ns = str(neighbor)
-            if ns in explored: continue
-
-            # not explored yet, evaluate
-            nf = fit_fun(neighbor)
-            explored[ns] = nf
-
-            # track best found so far
-            if nf > max_fit: max_form, max_fit = neighbor, nf
-
-            # break if target reached
-            if max_fit  > fit_target: break
-
-            # don't push formulas over the depth limit
-            if neighbor.depth() > max_depth: continue
-
-            # don't push if queue is over the size limit
-            if len(queue) >= max_queue: break
-
-            # push new node, track order for FIFO
-            heappush(queue, (-nf, push_order, neighbor)) # min heap
-            push_order += 1
-
-    return max_form, max_fit, itr+1, explored
-
 if __name__ == "__main__":
-
-    import sys
-    tag = sys.argv[1] # used for saving results
 
     import pickle as pk
     from geneng import load_data
 
-    do_perceptron = False
-
-    do_random = False
-    do_greedy = True
-    do_queued = False
-    do_show = False
-
-    max_evals = 50_000
-    # max_evals = 1_000_000_000
+    do_perceptron = True
 
     dataset = load_data(Ns=[3,4], perceptron=do_perceptron)
     # dataset[n]: [w_old, x, y, w_new, margins]
@@ -744,91 +667,18 @@ if __name__ == "__main__":
         #     print(f"    fitness({n2}) = {fitness_function(n2)}")
 
 
-    if do_random:
+    print("\n********************** random sampling\n")
+    max_evals = 10000
+    max_fit = -1
+    max_span = None
+    for rep in range(max_evals):
+        # span = SpanRule(None, None).sprout(term_prob=np.random.rand(), max_depth=6)
+        span = guide.sprout(SpanRule, Vector, term_prob=np.random.rand(), max_depth=6)
+        fit = fitness_function(span)
+        if fit > max_fit:
+            max_fit, max_span = fit, span
+            print(f"{rep}: {fit} vs {max_fit} <- {max_span}")
+            # print(max_span.tree_str())
+            if max_fit > .99999: break
+        # print(f"{rep}: {fit} vs {max_fit} <- {span}, {max_span}")
 
-        print("\n********************** random sampling\n")
-        max_fit = -1
-        max_span = None
-        for rep in range(max_evals):
-            # span = SpanRule(None, None).sprout(term_prob=np.random.rand(), max_depth=6)
-            span = guide.sprout(SpanRule, Vector, term_prob=np.random.rand(), max_depth=6)
-            fit = fitness_function(span)
-            if fit > max_fit:
-                max_fit, max_span = fit, span
-                print(f"{rep}: {fit} vs {max_fit} <- {max_span}")
-                # print(max_span.tree_str())
-                if max_fit > .99999: break
-            # print(f"{rep}: {fit} vs {max_fit} <- {span}, {max_span}")
-
-    if do_greedy:    
-
-        print("\n********************** repeated greedy\n")
-        max_fit = -1
-        max_span = None
-        num_evals = 0
-        num_sprouts = 0
-        results = []
-        while num_evals < max_evals:
-            num_sprouts += 1
-            if do_perceptron:
-                span = guide.sprout(SpanRule, Vector, term_prob=np.random.rand(), max_depth=np.random.randint(1,6+1))
-                span, fit, num_itrs, explored = greedy(guide, span, fitness_function, max_depth=6, max_itrs=100)
-                # # check that final performance always better for queued, greedy is a special case
-                # spanq, fitq, num_itrsq, exploredq = queued(guide, span, fitness_function, max_depth=6, max_itrs=30, max_queue=500)
-                # print(f"{fit:.4f} vs {fitq:.4f}, {num_itrs} vs {num_itrsq}, {len(explored)} vs {len(exploredq)}")
-            else:
-                span = guide.sprout(SpanRule, Vector, term_prob=np.random.rand(), max_depth=np.random.randint(1,10+1))
-                span, fit, num_itrs, explored = greedy(guide, span, fitness_function, max_depth=10, max_itrs=500)
-            num_evals += len(explored)
-            if fit > max_fit:
-                max_fit, max_span = fit, span
-                print(f"{num_sprouts} sprouts {num_evals} evals ({num_itrs} itrs|{len(explored)} eval'd): {max_fit:.4f} <- {max_span}")
-                # print(max_span.tree_str())
-                results.append((num_sprouts, num_evals, max_fit, max_span))
-                with open(f"grambump_greedy_{tag}.pkl", "wb") as f: pk.dump(results, f)
-                if max_fit > .99999: break
-
-    if do_queued:
-    
-        print("\n********************** repeated queued\n")
-        max_fit = -1
-        max_span = None
-        num_evals = 0
-        num_sprouts = 0
-        results = []
-        while num_evals < max_evals:
-            num_sprouts += 1
-            if do_perceptron:
-                span = guide.sprout(SpanRule, Vector, term_prob=np.random.rand(), max_depth=np.random.randint(1,6+1))
-                span, fit, num_itrs, explored = queued(guide, span, fitness_function, max_depth=6, max_itrs=100, max_queue=1000)
-            else:
-                span = guide.sprout(SpanRule, Vector, term_prob=np.random.rand(), max_depth=np.random.randint(1,8+1))
-                span, fit, num_itrs, explored = queued(guide, span, fitness_function, max_depth=8, max_itrs=1000, max_queue=2000)
-            # print(f"{num_evals} evals ({num_itrs} itrs|{len(explored)} eval'd): {max_fit:.4f} vs {fit:.4f} <- {span}")
-            num_evals += len(explored)
-            if fit > max_fit:
-                max_fit, max_span = fit, span
-                print(f"{num_sprouts} sprouts {num_evals} evals ({num_itrs} itrs|{len(explored)} eval'd): {max_fit} <- {max_span}")
-                # print(max_span.tree_str())
-                results.append((num_sprouts, num_evals, max_fit, max_span))
-                with open(f"grambump_queued_{tag}.pkl", "wb") as f: pk.dump(results, f)
-                if max_fit > .99999: break
-
-    if do_show:
-        import matplotlib.pyplot as pt
-
-        results = {}
-        for key in ("greedy", "queued"):
-            try:
-                with open(f"grambump_{key}_{tag}.pkl", "rb") as f: results[key] = pk.load(f)
-            except:
-                pass # didn't run that experiment yet
-
-        pt.figure()
-        for key in results:
-            print(key)
-            num_sprouts, num_evals, max_fit, max_span = zip(*results[key])
-            pt.plot(num_evals, max_fit, 'o-', label=key)
-            print(f"best fit {key}: {max_span}")
-        pt.legend()
-        pt.show()
