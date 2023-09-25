@@ -10,12 +10,14 @@ from adjacent_ltms import adjacency
 
 matplotlib.use('qtagg')
 matplotlib.rcParams['text.usetex'] = True
+matplotlib.rcParams['font.family'] = 'serif'
 
 back = True
 crad = 1
 line_width = 2
 
 window_size= (1024, 720)
+# window_size= (512, 360)
 
 ltms = np.load(f"ltms_3.npz")
 Y, W, X = ltms["Y"], ltms["W"], ltms["X"]
@@ -66,10 +68,11 @@ def draw_weights(p, Ws, opacity=1):
         w_arrow = pyvista.Arrow(start=(0, 0, 0), direction=w, tip_length=0.25, tip_radius=0.15, tip_resolution=4, shaft_radius=0.01, shaft_resolution=50, scale=1.1)
         p.add_mesh(w_arrow, show_edges=True, color=(1.,)*3, edge_color='black', line_width=line_width, opacity=opacity)
 
-def set_view(p):
+def set_view(p, scale):
     p.camera.elevation += 0#15
     p.camera.azimuth -= 15
-    p.camera.position = tuple(pos*.925 for pos in p.camera.position)
+    # p.camera.position = tuple(pos*.925 for pos in p.camera.position)
+    p.camera.position = tuple(pos*scale for pos in p.camera.position)
 
 def get_plotter():
     if back:
@@ -84,7 +87,7 @@ W = W / np.linalg.norm(W, axis=1, keepdims=True)
 p = get_plotter()
 draw_circles(p)
 draw_weights(p, W)
-set_view(p)
+set_view(p, .6)
 img1 = p.screenshot(transparent_background=True, scale=2)
 
 # B (4.3): identify adjacencies (dashed lines between them)
@@ -110,52 +113,53 @@ for i in range(len(A)):
         # p.add_mesh(arrow, show_edges=False, color=(.25,)*3, edge_color='black', line_width=line_width)
         p.add_mesh(pyvista.Cylinder((wi+wj)/2, (wi-wj), radius=.025, height=np.linalg.norm(wi-wj)), color=(.33,)*3)
 
-set_view(p)
+set_view(p, .75)
 img2 = p.screenshot(transparent_background=True, scale=2)
+
+
+# D (4.5-4.6): optimize span loss (grayscale w converging to solution)
+p = get_plotter()
+draw_circles(p)
+draw_weights(p, W[[7,8]], opacity=.5)
+draw_weights(p, W_opt[[7,8]])
+set_view(p, .8)
+img3 = p.screenshot(transparent_background=True, scale=2)
 
 # C (4.4): limit to canonicals (bold outlines, dashed arrows with S matrix maps)
 p = get_plotter()
 draw_circles(p)
-draw_weights(p, W[[5,6]])
-draw_weights(p, W[[11,13]], opacity=.5)
+# draw_weights(p, W, opacity=.5)
+draw_weights(p, W_opt[[7,8]])
+draw_weights(p, W_opt[[2,0]], opacity=.5)
 p.add_mesh(pyvista.Cylinder(direction=(1,0,1), radius=.1, height=2.25), color=(.25,)*3)
-set_view(p)
-img3 = p.screenshot(transparent_background=True, scale=2)
-
-# D (4.5-4.6): optimize span loss (grayscale w converging to solution)
-
-p = get_plotter()
-draw_circles(p)
-draw_weights(p, W, opacity=.5)
-draw_weights(p, W_opt)
-set_view(p)
+set_view(p, .7)
 img4 = p.screenshot(transparent_background=True, scale=2)
 
-pt.figure(figsize=(15, 4))
+pt.figure(figsize=(12, 3))
 
 pt.subplot(1,4,1)
 pt.imshow(img1)
 pt.axis('off')
 # pt.title("Section 4.2", fontsize=18)
-pt.text(50, 50, "Section 4.2", fontsize=18)
+# pt.text(50, 50, "Regions", fontsize=18)
 
 pt.subplot(1,4,2)
 pt.imshow(img2)
 pt.axis('off')
 # pt.title("Section 4.3", fontsize=18)
-pt.text(50, 50, "Section 4.3", fontsize=18)
+# pt.text(50, 50, "Adjacencies", fontsize=18)
 
 pt.subplot(1,4,3)
 pt.imshow(img3)
 pt.axis('off')
-# pt.title("Section 4.4", fontsize=18)
-pt.text(50, 50, "Section 4.4", fontsize=18)
+# pt.title("Section 4.5-4.6", fontsize=18)
+# pt.text(50, 50, "Optimization", fontsize=18)
 
 pt.subplot(1,4,4)
 pt.imshow(img4)
 pt.axis('off')
-# pt.title("Section 4.5-4.6", fontsize=18)
-pt.text(50, 50, "Section 4.5-4.6", fontsize=18)
+# pt.title("Section 4.4", fontsize=18)
+# pt.text(50, 50, "Symmetries", fontsize=18)
 
 pt.tight_layout(pad=0)
 pt.savefig("methods.png")

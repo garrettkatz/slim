@@ -43,7 +43,8 @@ if __name__ == "__main__":
                 residuals[N].append(resid)
 
     # plot results
-    pt.figure(figsize=(2.5,1.5))
+    # pt.figure(figsize=(2.5,1.5))
+    pt.figure(figsize=(2.,1.5))
 
     # violin plots of distributions
     parts = pt.violinplot([residuals[N] for N in Ns], Ns, widths=.8)
