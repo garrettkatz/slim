@@ -1,14 +1,34 @@
 import numpy as np
 
+"""
+Runs a graph search over the canonical region adjacency graphs
+Favors rules that respect all region constraints and produce one unique weight vector per region
+Can run searches for multiple dimensions N 
+Applies learning_rule at each transition, should be a function handle
+    w_new = learning_rule(w, x, y)
+Starts in region whose dichotomy assigns +1 to all vertices of the half-cube
+w0 are initial weights for this region
+X[N][:,k]: kth vertex of half-cube in dimension N
+Yc[N][i,k]: label for kth vertex in ith canonical dichotomy in dimension N
+Ac[N]: list of (i,j,k) adjacencies in dimension N
+eps: minimum slack enforced for region constraints
+verbose: if True, print graph search progress messages
+"""
 def graph_fitness(learning_rule, w0, X, Yc, Ac, eps=1, verbose=False):
 
+    # loss when the rule violates a region constraint
     region_loss = 0.
+
+    # loss when the rule produces a different weight vector when transitioning to a previously explored region
     match_loss = 0.
+
+    # Saves resulting weights produced by learning rule
     W = {}
-    
+
+    # Process one N at a time    
     for N in X.keys():
 
-        # organize adjacencies by region
+        # organize adjacencies by source region
         A = {}
         for (i,j,k) in Ac[N]:
             if i not in A: A[i] = []
@@ -22,32 +42,44 @@ def graph_fitness(learning_rule, w0, X, Yc, Ac, eps=1, verbose=False):
 
         # run graph search
         while len(queue) > 0:
+
+            # pop next region to process
             i, w = queue.pop()
             if verbose: print(f" {N}, {i} region popped")
 
-            # don't repeat work; previously explored should match
+            # check if this region was already explored by the graph search
             if i in explored:
+
+                # if so, the popped weights should match what they were when it was first explored
+                # so accumulate any difference in the match loss
                 diff = np.sum((w - explored[i])**2)
-                if verbose: print(f" {N}, {i} explored, diff = {diff}")
                 match_loss += diff
+                if verbose: print(f" {N}, {i} explored, diff = {diff}")
+
+                # and don't repeat any more work since this region was already explored
                 continue
 
+            # mark this region as explored the first time it is popped
             explored[i] = w
 
-            # check region constraint
-            dots = (w * (X[N] * Yc[N][i]).T).sum(axis=1) # should be > eps
+            # check region constraints
+            dots = (w * (X[N] * Yc[N][i]).T).sum(axis=1)
+            # all should have constraint slack >= eps
             violation = np.fabs(np.minimum(dots - eps, 0)).max()
+            # accumulate any violation in the region loss
             region_loss += violation
             if verbose: print(f" {N}, {i} new, violation = {violation}")
 
-            # queue up children
+            # use learning rule to push new weights for adjacent regions into the queue
             for (j,k) in A[i]:
+                # transitioning to new region j, w_new should fit dichotomy there
                 w_new = learning_rule(w, X[N][:,k], Yc[N][j,k])
                 queue.append((j, w_new))
 
-        # save W results
+        # save W results for each N
         W[N] = np.array([explored[i] for i in range(len(explored))])
 
+    # return the loss values and weights
     return region_loss, match_loss, W
 
 if __name__ == "__main__":
