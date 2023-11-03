@@ -231,11 +231,11 @@ def main():
             print(W_lp[i], Wc[i], np.fabs(Wc[i] @ X).min())
     
         print("\n" + "*"*8 + " span coefficients and residuals " + "*"*8 + "\n")
-        print("wi ~ a * wj + b * xk, resid, ijk")
+        print("wi ~ a * wj + b * xk, yik, resid, ijk")
         for (i, j, k) in Ac:
             ab = np.linalg.lstsq(np.vstack((Wc[j], X[:,k])).T, Wc[i], rcond=None)[0]
             resid = np.fabs(Wc[i] - (ab[0]*Wc[j] + ab[1]*X[:,k])).max()
-            print(Wc[i], ab[0], Wc[j], ab[1], X[:,k], resid, i,j,k)
+            print(Wc[i], ab[0], Wc[j], ab[1], X[:,k], Yc[i,k], resid, i,j,k)
 
 if __name__ == "__main__": main()
 

@@ -173,7 +173,7 @@ def fitness_beta(n: Array): return fitness_function(n, 1)
 
 if __name__ == "__main__":
 
-    dataset = load_data(Ns=[3,4])
+    dataset = load_data(Ns=[3])
 
     productions = [Constant, Dimension, Variable, Add, Sub, Mul, Div, Power, Maximum, Minimum, Dot, Sign, Sqrt, Log2, Sum, Min, Max]
     grammar = extract_grammar(productions, Scalar) # Scalar ensures that final output is 1D
