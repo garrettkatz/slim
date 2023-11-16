@@ -64,8 +64,28 @@ class Div(Array):
     def eval(self, line):
         left = self.left.eval(line)
         right = self.right.eval(line)
-        return np.where(right != 0, left / right, 0)
+        shape = np.broadcast_shapes(left.shape, right.shape)
+        right = np.broadcast_to(right, shape)
+        return np.divide(left, right, where=(np.fabs(right) > .01), out=100.*np.sign(right))
     def __str__(self): return f"({self.left} / {self.right})"
+
+@dataclass
+class Power(Array):
+    base: Array
+    expo: Array
+    def eval(self, line):
+        base = self.base.eval(line).astype(float)
+        expo = self.expo.eval(line)
+
+        real = (base >= 0) | (expo == expo.round()) # otherwise numpy returns nan
+        out = np.power(base, expo)
+        out[~real] = 0.
+        small = (np.fabs(out) < 2**10)
+        out[~small] = 2**10 * np.sign(out[~small])
+
+        return np.power(base, expo, where=(real & small), out=out)
+
+    def __str__(self): return f"({self.base} ** {self.expo})"
 
 @dataclass
 class Maximum(Array):
@@ -105,19 +125,19 @@ class Sqrt(Array):
     def __str__(self): return f"sqrt({self.arg})"
 
 @dataclass
-class Log(Array):
+class Log2(Array):
     arg: Array
     def eval(self, line):
         arg = self.arg.eval(line)
-        return np.where(arg > 0, np.log2(arg), 0.)
+        return np.log2(np.fabs(arg), where=(np.fabs(arg) > 2**-10), out=-10*np.ones(arg.shape))
     def __str__(self): return f"log2({self.arg})"
 
 @dataclass
-class Exp(Array):
-    arg: Array
+class Exp2(Array):
+    expo: Array
     def eval(self, line):
-        return 2 ** self.arg.eval(line)
-    def __str__(self): return f"exp2({self.arg})"
+        return Power(2*np.ones((1,1)), self.expo).eval(line)
+    def __str__(self): return f"2**({self.arg})"
 
 @dataclass
 class Sum(Array):
@@ -137,6 +157,12 @@ class Max(Array):
     def eval(self, line): return self.arg.eval(line).max(axis=1, keepdims=True)
     def __str__(self): return f"{self.arg}.max()"
 
+# Drops all columns but leading to ensure scalar result
+@dataclass
+class Scalar(Array):
+    arg: Array
+    def eval(self, line): return self.arg.eval(line)[:,:1]
+    def __str__(self): return f"{self.arg}[:,:1]"
 
 @dataclass
 class SpanRule:
@@ -155,20 +181,20 @@ class VecRule:
         return self.arg.eval(line) * np.ones((1, line[0].shape[1]))
     def __str__(self): return f"{self.arg}"
 
-def fitness_function(n: Array):
-    fitness = 0.
-    for line in dataset:
-        w_pred, w_new, margins = n.eval(line), line[-2], line[-1]
-        w_pred /= np.maximum(np.linalg.norm(w_pred, axis=1, keepdims=True), 10e-8)
-        fitness += (w_pred * w_new).sum(axis=1).mean() # cosine similarity
-    return fitness / len(dataset)
-
 if __name__ == "__main__":
 
     # flag for perceptron rules, false then svm
     do_perceptron = True
 
     dataset = load_data(Ns=[3,4], perceptron=do_perceptron)
+
+    def fitness_function(n: Array):
+        fitness = 0.
+        for line in dataset:
+            w_pred, w_new, margins = n.eval(line), line[-2], line[-1]
+            w_pred /= np.maximum(np.linalg.norm(w_pred, axis=1, keepdims=True), 10e-8)
+            fitness += (w_pred * w_new).sum(axis=1).mean() # cosine similarity
+        return fitness / len(dataset)
 
     # sanity-check that perceptron rule does fit the data
     if do_perceptron:
@@ -188,8 +214,8 @@ if __name__ == "__main__":
         print(f"Perceptron fitness = {fitness}, rule = {rule}")
 
     # productions = [Constant, Dimension, Variable, Add, Sub, Mul, Div, Maximum, Minimum, Dot, Sign, Sqrt, Log, Exp, Sum, Min, Max]
-    productions = [Constant, Dimension, Variable, Add, Sub, Mul, Div, Maximum, Minimum, Dot, Sign, Sqrt, Sum, Min, Max]
-    # productions = [Constant, Dimension, Variable, Sub, Dot, Sign] # perceptron sub-set
+    # productions = [Constant, Dimension, Variable, Add, Sub, Mul, Div, Maximum, Minimum, Dot, Sign, Sqrt, Sum, Min, Max]
+    productions = [Constant, Dimension, Variable, Sub, Dot, Sign] # perceptron sub-set
     grammar = extract_grammar(productions, SpanRule)
     # grammar = extract_grammar(productions, VecRule)
     print("Grammar: {}.".format(repr(grammar)))
