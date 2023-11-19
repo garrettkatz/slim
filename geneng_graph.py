@@ -9,6 +9,7 @@ if __name__ == "__main__":
 
     do_opt = True # whether to run optimization
     do_check = True # whether to check result of optimization
+    eps = .01 # minimal slack in region constraints
 
     # ops imported from geneng_ab
     productions = [Constant, Dimension, Variable, Add, Sub, Mul, Div, Power, Maximum, Minimum, Dot, Sign, Sqrt, Log2, Sum, Min, Max]
@@ -21,7 +22,11 @@ if __name__ == "__main__":
     print("Grammar: {}.".format(repr(grammar)))
 
     Yc, W, X, Ac = load_ltm_data(Ns)
-    W0 = {N: W[N][0] for N in Ns}
+
+    # set up initial weights for graph search as [0,0,...,0,1]
+    # so happens to always be index 1 in the enumerate_ltms canonical dichotomies
+    I0 = {N: 1 for N in Ns}
+    W0 = {N: W[N][I0[N]] for N in Ns}
 
     def learning_rule_factory(n: Array):
 
@@ -36,7 +41,7 @@ if __name__ == "__main__":
     def fit_fun(n: Array):
 
         learning_rule = learning_rule_factory(n)
-        region_loss, match_loss, W = graph_fitness(learning_rule, W0, X, Yc, Ac, eps=.1, verbose=False)
+        region_loss, match_loss, W = graph_fitness(learning_rule, I0, W0, X, Yc, Ac, eps, verbose=False)
         # print(region_loss)
 
         # region loss should take precedence, but find a better way to combine with match_loss (or multiobjective)
@@ -58,14 +63,14 @@ if __name__ == "__main__":
             problem=prob,
             # probability_crossover=0.4,
             # probability_mutation=0.4,
-            number_of_generations=1000,
+            number_of_generations=4000,
             max_depth=7,
-            population_size=2000,
+            population_size=4000,
             selection_method=("tournament", 2),
-            n_elites=200,
-            n_novelties=400,
+            n_elites=800,
+            n_novelties=1600,
             seed = np.random.randint(123456), # 123 for reproducible convergence on perceptron
-            target_fitness=0.0,
+            target_fitness=-1e-10, # allow small round-off, much less than epsilon
             # favor_less_complex_trees=True,
         )
 
@@ -86,7 +91,7 @@ if __name__ == "__main__":
     if do_check:
 
         learning_rule = learning_rule_factory(formula)
-        region_loss, match_loss, W = graph_fitness(learning_rule, W0, X, Yc, Ac, eps=.1, verbose=False)
+        region_loss, match_loss, W = graph_fitness(learning_rule, I0, W0, X, Yc, Ac, eps, verbose=False)
         print(f"region loss = {region_loss}, match loss = {match_loss}")
         for N in Ns:
             print(f"N={N}, W[N]:")
@@ -94,19 +99,25 @@ if __name__ == "__main__":
 
             A = organize_by_source(Ac[N])
 
-            # run a bunch of random transitions
-            T = 100
-            i = np.random.randint(W[N].shape[0])
-            w = W[N][i]
-            for t in range(T):
+            # repeatedly run a bunch of random transitions
+            R = 10 # repetitions
+            T = 100 # transitions
+            for r in range(R):
 
-                # check current region
-                assert ((w * (X[N] * Yc[N][i]).T).sum(axis=1) > 0).all()
+                # start in random dichotomy
+                i = np.random.randint(W[N].shape[0])
+                w = W[N][i]
 
-                # transition to new region
-                j, k = A[i][np.random.randint(len(A[i]))]
-                w = learning_rule(w, X[N][:,k], Yc[N][j,k])
-                i = j
+                # stream of transitions
+                for t in range(T):
+    
+                    # check current region
+                    assert ((w * (X[N] * Yc[N][i]).T).sum(axis=1) > 0).all()
+    
+                    # transition to random new region
+                    j, k = A[i][np.random.randint(len(A[i]))]
+                    w = learning_rule(w, X[N][:,k], Yc[N][j,k])
+                    i = j
 
         print("check passed.")
 

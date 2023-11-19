@@ -30,15 +30,14 @@ Favors rules that respect all region constraints and produce one unique weight v
 Can run searches for multiple dimensions N 
 Applies learning_rule at each transition, should be a function handle
     w_new = learning_rule(w, x, y)
-Starts in region whose dichotomy assigns +1 to all vertices of the half-cube
-w0 are initial weights for this region
+Starts in dichotomy i0[N], w0[N] are initial weights for this region
 X[N][:,k]: kth vertex of half-cube in dimension N
 Yc[N][i,k]: label for kth vertex in ith canonical dichotomy in dimension N
 Ac[N]: list of (i,j,k) adjacencies in dimension N
 eps: minimum slack enforced for region constraints
 verbose: if True, print graph search progress messages
 """
-def graph_fitness(learning_rule, w0, X, Yc, Ac, eps=1, verbose=False):
+def graph_fitness(learning_rule, i0, w0, X, Yc, Ac, eps=1, verbose=False):
 
     # loss when the rule violates a region constraint
     region_loss = 0.
@@ -61,7 +60,7 @@ def graph_fitness(learning_rule, w0, X, Yc, Ac, eps=1, verbose=False):
 
         # init graph search
         explored = {} # explored[i] = w_i
-        queue = [(0, w0[N])] # (dichotomy index i, w_i)
+        queue = [(i0[N], w0[N])] # (dichotomy index i, w_i)
 
         # run graph search
         while len(queue) > 0:
@@ -109,7 +108,7 @@ def graph_fitness(learning_rule, w0, X, Yc, Ac, eps=1, verbose=False):
 
 if __name__ == "__main__":
 
-    Ns = [3, 4, 5]
+    Ns = [3, 4]
     Yc, W, X, Ac = load_ltm_data(Ns)
 
     def perceptron_rule(w, x, y):
@@ -119,22 +118,24 @@ if __name__ == "__main__":
         return w
 
     def hebbian_rule(w, x, y):
-        return w + y * x # / len(x)
-        # return (w + y * x) / (len(x) - 1)
+        # return w + y * x # / len(x)
+        return w + y * x / (len(x) - 1) # works for N in [3,4] when starting at i0=1
 
-    w0 = {N: W[N][0] for N in Ns}
+    # so happens that 1st dichotomy is [0,0,...,0,1] weight vector
+    i0 = {N: 1 for N in Ns}
+    w0 = {N: W[N][i0[N]] for N in Ns}
 
-    region_loss, match_loss, W = graph_fitness(perceptron_rule, w0, X, Yc, Ac, eps=0.5, verbose=True)
+    region_loss, match_loss, W = graph_fitness(perceptron_rule, i0, w0, X, Yc, Ac, eps=0.5, verbose=True)
     print('perceptron', region_loss, match_loss, '\n')
     print(W[3])
     print()
 
-    region_loss, match_loss, W = graph_fitness(hebbian_rule, w0, X, Yc, Ac, eps=1.0, verbose=True)
+    region_loss, match_loss, W = graph_fitness(hebbian_rule, i0, w0, X, Yc, Ac, eps=0.1, verbose=True)
     print('hebbian', region_loss, match_loss, '\n')
     print(W[3])
     print()
 
-    region_loss, match_loss, W = graph_fitness(constant_rule, w0, X, Yc, Ac, eps=0.5, verbose=True)
+    region_loss, match_loss, W = graph_fitness(constant_rule, i0, w0, X, Yc, Ac, eps=0.5, verbose=True)
     print('constant', region_loss, match_loss, '\n')
     print(W[3])
     print()
