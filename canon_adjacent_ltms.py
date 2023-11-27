@@ -10,8 +10,8 @@ from enumerate_ltms import check_feasibility
 warnings.filterwarnings("ignore", category=LinAlgWarning)
 warnings.filterwarnings("ignore", category=OptimizeWarning)
 
-# save one core when multiprocessing
-num_procs = cpu_count()-1
+# save some cores when multiprocessing
+num_procs = cpu_count()-2
 
 # If i and j are adjacent, so are Si and Sj for any hypercube symmetry S.
 # This includes S that canonicalize i.
@@ -47,6 +47,7 @@ def canon_adjacency(X, Y):
 if __name__ == "__main__":
 
     do_adj = True # whether to re-generate the adjacencies or only load them
+    do_jc = True # whether to extract joint-canonical adjacencies
 
     # # get adjacencies up to dimension N_max
     # if len(sys.argv) > 1:
@@ -66,7 +67,12 @@ if __name__ == "__main__":
             Yn, Wn = canon_adjacency(X, Y)
             with open(f"adjs_{N}_c.npz", "wb") as f:
                 pk.dump((Yn, Wn), f)
-    
+
+        if do_jc:
+
+            with open(f"adjs_{N}_c.npz", "rb") as f:
+                (Yn, Wn) = pk.load(f)
+
             # extract subset of joint-canonical adjacencies only
             A = set()
             for i, (yi, wi) in enumerate(zip(Y, W)):
