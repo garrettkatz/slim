@@ -174,6 +174,15 @@ class SpanRule:
         return alpha * line[0] + beta * line[1]
     def __str__(self): return f"({self.alpha}*w + {self.beta}*x)"
 
+# span rule with alpha == 1
+@dataclass
+class VertexRule:
+    beta: Array
+    def eval(self, line):
+        beta = self.beta.eval(line).mean(axis=1, keepdims=True)
+        return line[0] + beta * line[1]
+    def __str__(self): return f"(w + {self.beta}*x)"
+
 @dataclass
 class VecRule:
     arg: Array

@@ -48,10 +48,12 @@ if __name__ == "__main__":
 
     do_adj = True # whether to re-generate the adjacencies or only load them
 
-    # get adjacencies up to dimension N_max
-    if len(sys.argv) > 1:
-        N_max = int(sys.argv[1])
-    Ns = list(range(3, N_max + 1))
+    # # get adjacencies up to dimension N_max
+    # if len(sys.argv) > 1:
+    #     N_max = int(sys.argv[1])
+    # Ns = list(range(3, N_max + 1))
+
+    Ns = [8]
 
     for N in Ns:
 

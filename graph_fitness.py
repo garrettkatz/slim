@@ -1,28 +1,6 @@
 import pickle as pk
 import numpy as np
-
-def load_ltm_data(Ns):
-    Yc, W, X, Ac = {}, {}, {}, {}
-
-    for N in Ns:
-
-        # load canonical hemis
-        ltms = np.load(f"ltms_{N}_c.npz")
-        Yc[N], W[N], X[N] = ltms["Y"], ltms["W"], ltms["X"]
-
-        with open(f"adjs_{N}_jc.npz", "rb") as f: Ac[N] = pk.load(f)
-
-    return Yc, W, X, Ac
-
-# organize adjacencies by source region
-# Ac_N: Ac[N] for one N
-# returns A_N[i] = [..., (j,k), ...] adjacent region j with boundary k to region i
-def organize_by_source(Ac_N):
-    A = {}
-    for (i,j,k) in Ac_N:
-        if i not in A: A[i] = []
-        A[i].append((j, k))
-    return A
+from load_ltm_data import *
 
 """
 Runs a graph search over the canonical region adjacency graphs

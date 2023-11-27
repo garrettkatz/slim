@@ -4,8 +4,10 @@ from graph_fitness import load_ltm_data, organize_by_source, graph_fitness
 
 if __name__ == "__main__":
 
-    Ns = [3,4,5,6]
-    do_span = True # whether to constrain learning rule to be span rule
+    Ns = [3,4,5]
+
+    do_span = False # whether to constrain learning rule to be span rule
+    do_vert = True # whether to constrain learning rule to be vertex rule
 
     do_opt = True # whether to run optimization
     do_check = True # whether to check result of optimization
@@ -16,6 +18,8 @@ if __name__ == "__main__":
     
     if do_span:
         grammar = extract_grammar(productions, SpanRule)
+    elif do_vert:
+        grammar = extract_grammar(productions, VertexRule)
     else:
         grammar = extract_grammar(productions, VecRule)
 
@@ -44,8 +48,9 @@ if __name__ == "__main__":
         region_loss, match_loss, W = graph_fitness(learning_rule, I0, W0, X, Yc, Ac, eps, verbose=False)
         # print(region_loss)
 
-        # region loss should take precedence, but find a better way to combine with match_loss (or multiobjective)
-        total_loss = region_loss + 0.1 * match_loss
+        # region loss should take precedence
+        # tanh(matchloss) * eps < eps, so if region loss >= eps (outside of region) it takes precedence
+        total_loss = region_loss + eps * np.tanh(match_loss)
 
         # NaNs might mess up genetic engine, convert to large finite loss
         if not np.isfinite(total_loss): total_loss = 10**6
@@ -63,13 +68,13 @@ if __name__ == "__main__":
             problem=prob,
             # probability_crossover=0.4,
             # probability_mutation=0.4,
-            number_of_generations=4000,
-            max_depth=7,
-            population_size=4000,
+            number_of_generations=10000,
+            max_depth=8,
+            population_size=6000,
             selection_method=("tournament", 2),
-            n_elites=800,
-            n_novelties=1600,
-            seed = np.random.randint(123456), # 123 for reproducible convergence on perceptron
+            n_elites=1000,
+            n_novelties=2000,
+            seed=None, #np.random.randint(123456), # 123 for reproducible convergence on perceptron
             target_fitness=-1e-10, # allow small round-off, much less than epsilon
             # favor_less_complex_trees=True,
         )
@@ -92,7 +97,7 @@ if __name__ == "__main__":
 
         learning_rule = learning_rule_factory(formula)
         region_loss, match_loss, W = graph_fitness(learning_rule, I0, W0, X, Yc, Ac, eps, verbose=False)
-        print(f"region loss = {region_loss}, match loss = {match_loss}")
+        print(f"eps={eps}, region loss = {region_loss}, match loss = {match_loss}")
         for N in Ns:
             print(f"N={N}, W[N]:")
             print(W[N])
