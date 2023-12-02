@@ -168,12 +168,14 @@ if __name__ == "__main__":
     do_gen = True # whether to re-generate the hemichotomies or only load them
     canonical = True # whether to enumerate canonical hemichotomies only
 
-    # enumerate up to dimension N_max
-    if len(sys.argv) > 1:
-        N_max = int(sys.argv[1])
-    else:
-        N_max = 8
-    Ns = list(range(3, N_max + 1))
+    # signatures:
+    # python enumerate_ltms.py # 3 to 8
+    # python enumerate_ltms.py <N_max> # 3 to N_max
+    # python enumerate_ltms.py <N_min> <N_max> # N_min to N_max
+    N_min, N_max = 3, 8
+    if len(sys.argv) == 2: N_max = int(sys.argv[1])
+    if len(sys.argv) == 3: N_min, N_max = map(int, sys.argv[1:3])
+    Ns = list(range(N_min, N_max+1))
 
     # process dimensions one at a time
     for N in Ns:
