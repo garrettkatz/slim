@@ -6,6 +6,7 @@
 import sys
 import pickle as pk
 import numpy as np
+import matplotlib.pyplot as pt
 import scipy.sparse as sp
 from scipy.optimize import linprog
 from load_ltm_data import *
@@ -27,7 +28,6 @@ if __name__ == "__main__":
 
         # region constraint for i
         A_i = sp.csr_array(-(X*Yc[i]).T)
-
         blocks = [[A_i] + [None]*len(Yn[i])] # first row
 
         # for every j,k adjacency to i
@@ -35,7 +35,7 @@ if __name__ == "__main__":
             k = (Yn[i][j] != Yc[i]).argmax()
 
             row = [None]*(1+len(Yn[i]))
-            row[0] = A_i
+            row[0] = sp.csr_array(-(X*Yn[i][j]).T)
             row[1+j] = sp.csr_array(-(X*Yn[i][j]).T @ X[:,k:k+1])
 
             blocks.append(row)
@@ -44,10 +44,23 @@ if __name__ == "__main__":
         A_ub = sp.bmat(blocks, format='csr')
         b_ub = -eps*np.ones(A_ub.shape[0])
 
+        # if N <= 4:
+        #     pt.imshow(A_ub.toarray())
+        #     pt.show()
+
         # setup objective (opposite constraints to keep problem bounded)
         c = -A_ub.mean(axis=0)
 
         result = linprog(c, A_ub, b_ub, bounds = (None, None), method = "highs", options={"disp": False})
         print(f"Region {i} of {len(Yc)}: {result.message}")
         assert result.success
+
+        w_i, b = result.x[:N], result.x[N:]
+        assert (np.sign(w_i @ X) == Yc[i]).all()
+
+        for j in range(len(Yn[i])):
+
+            k = (Yn[i][j] != Yc[i]).argmax()
+            w_j = w_i + b[j]*X[:,k]
+            assert (np.sign(w_j @ X) == Yn[i][j]).all()
 
