@@ -24,6 +24,7 @@ if __name__ == "__main__":
     with open(f"adjs_{N}_c.npz", "rb") as f: (Yn, _) = pk.load(f)
 
     # for every region
+    W_opt = np.empty(Wc.shape)
     for i in range(len(Yc)):
 
         # region constraint for i
@@ -63,4 +64,11 @@ if __name__ == "__main__":
             k = (Yn[i][j] != Yc[i]).argmax()
             w_j = w_i + b[j]*X[:,k]
             assert (np.sign(w_j @ X) == Yn[i][j]).all()
+
+        W_opt[i] = w_i
+
+    print("Wc:")
+    print(Wc.round(3))
+    print("W_opt:")
+    print(W_opt.round(3))
 
