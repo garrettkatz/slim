@@ -16,6 +16,7 @@ wc = np.array([13, 7, 6, 6, 4, 4, 4, 2.5, 2.5])
 ya = np.sign(wa @ X)
 yb = np.sign(wb @ X)
 yc = np.sign(wc @ X)
+print((np.fabs(ya) == 1).all())
 print((ya == yb).all())
 print((ya == yc).all())
 
@@ -23,12 +24,19 @@ print("wa|wb, wc norms:")
 print((wb**2).sum())
 print((wc**2).sum())
 
+# check unique fractional weights 
+wa = np.array([14.5, 12.5, 9.5, 7.5, 6, 4, 4, 1.5, 1.5])
+ya = np.sign(wa @ X)
+
 # Sanity check by linprog
 A = X[:, ya < 0].T
 b = -np.ones(2**8)
 c = np.ones(9)
-result = linprog(c, A_ub=A, b_ub=b, bounds=(None, None))
+result = linprog(c, A_ub=A, b_ub=b, bounds=(None, None), method='simplex')
 wlp = result.x
+
+print("lp'd w:")
+print(wlp)
 
 # Linprog the boundaries
 Xh = X[:, ya < 0].T
@@ -42,10 +50,14 @@ for b in range(2**8):
         b_eq = np.zeros(1),
         A_ub = Xh[others],
         b_ub = -np.ones(2**8 - 1),
-        bounds=(None, None))
+        bounds=(None, None),
+        # method='simplex',
+        )
 
     w = result.x
-    boundaries[b] = (Xh[others] @ w <= -.99).all() and np.fabs(Xh[b] @ w) <= 0.01
+    # print(result.message)
+    if w is not None:
+        boundaries[b] = ((Xh[others] @ w) <= -.99).all() and np.fabs(Xh[b] @ w) <= 0.01
     print(f"{b} of {2**8}, {boundaries.sum()} boundaries")
 
 print("lp'd w:")
