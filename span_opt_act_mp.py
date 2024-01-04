@@ -22,8 +22,8 @@ mp.rcParams['font.family'] = 'serif'
 def main():
 
     do_opt = True # whether to run the optimization or just load results
-    num_updates = int(1e6) # maximum number of updates if stopping criterion not reached
-    save_period = int(1e3) # number of updates between saving intermediate results
+    num_updates = int(1e7) # maximum number of updates if stopping criterion not reached
+    save_period = int(1e4) # number of updates between saving intermediate results
     eps = 0.1 # constraint slack threshold
 
     # input dimension for optimization
@@ -74,33 +74,62 @@ def main():
         angle_curve = [] # max angle
         gamma_curve = [] # line search step size
 
+        # Extract indices for batched loss calculations
+        ii, jj, kk = map(list, zip(*Ac))
+        x_kk = X.T[kk]
+
         # optimization loop
         for update in range(num_updates):
 
-            # calculate loss and gradient on joint-canonical adjacencies
-            loss = 0.
-            min_cos = 1.
-            grad = np.zeros(Wc.shape)
-            for (i,j,k) in Ac:
+            # calculate loss on joint-canonical adjacencies (batched)
+            w_ii, w_jj = Wc[ii], Wc[jj]
+            wiPk = w_ii - x_kk * (x_kk * w_ii).sum(axis=1, keepdims=True) / N
+            wjPk = w_jj - x_kk * (x_kk * w_jj).sum(axis=1, keepdims=True) / N
+            wiPkwi = (wiPk**2).sum(axis=1, keepdims=True)
+            wjPkwj = (wjPk**2).sum(axis=1, keepdims=True)
+            wiPkwj = (wiPk*wjPk).sum(axis=1, keepdims=True)
 
-                # get projected weights
-                wi, wj, xk = Wc[i], Wc[j], X[:,k]
-                Pk = PX[k]
-                wiPk = wi @ Pk
-                wjPk = wj @ Pk
-                wiPkwi = wiPk @ wiPk
-                wiPkwj = wiPk @ wjPk
-                wjPkwj = wjPk @ wjPk
+            wiPk_n, wjPk_n = wiPkwi**.5, wjPkwj**.5
+            v_min_cos = (wiPkwj / (wiPk_n * wjPk_n)).min()
 
-                # track minimum cosine
-                wiPk_n, wjPk_n = norm(wiPk), norm(wjPk)
-                min_cos = min(min_cos, wiPkwj / (wiPk_n * wjPk_n))
+            v_loss = (wiPkwi * wjPkwj - wiPkwj**2).sum()
+
+            # accumulate gradient
+            grad_terms = 4 * (wiPk * wjPkwj - wiPkwj * wjPk)
+            v_grad = np.zeros(Wc.shape)
+            for idx, i in enumerate(ii): 
+                v_grad[i] += grad_terms[idx]
+
+            # # calculate loss and gradient on joint-canonical adjacencies (looped)
+            # loss = 0.
+            # min_cos = 1.
+            # grad = np.zeros(Wc.shape)
+            # for (i,j,k) in Ac:
+
+            #     # get projected weights
+            #     wi, wj, xk = Wc[i], Wc[j], X[:,k]
+            #     Pk = PX[k]
+            #     wiPk = wi @ Pk
+            #     wjPk = wj @ Pk
+            #     wiPkwi = wiPk @ wiPk
+            #     wiPkwj = wiPk @ wjPk
+            #     wjPkwj = wjPk @ wjPk
+
+            #     # track minimum cosine
+            #     wiPk_n, wjPk_n = norm(wiPk), norm(wjPk)
+            #     min_cos = min(min_cos, wiPkwj / (wiPk_n * wjPk_n))
     
-                # accumulate span loss
-                loss += wiPkwi * wjPkwj - wiPkwj**2
+            #     # accumulate span loss
+            #     loss += wiPkwi * wjPkwj - wiPkwj**2
     
-                # accumulate gradient
-                grad[i] += 4 * (wiPk * wjPkwj - wiPkwj * wjPk)
+            #     # accumulate gradient
+            #     grad[i] += 4 * (wiPk * wjPkwj - wiPkwj * wjPk)
+
+            # assert np.isclose(v_loss, loss)
+            # assert np.isclose(v_min_cos, min_cos)
+            # assert np.allclose(v_grad, grad)
+
+            loss, min_cos, grad = v_loss, v_min_cos, v_grad
 
             # # normalize by number of summands
             # loss /= len(Ac)
@@ -152,30 +181,67 @@ def main():
             Delta = clip_scale * Delta
             # print('clip', clip_scale)
 
-            # analytical line search
-            cubic = [0, 0, 0, 0] # coefficients of line search derivative (cubic polynomial)
-            step_grad = np.zeros(grad.shape) # sanity check gradient at end of step (gamma = 1)
-            for (i,j,k) in Ac:
+            # analytical line search (batched)
+            d_ii, d_jj = Delta[ii], Delta[jj]
+            diPk = d_ii - x_kk * (x_kk * d_ii).sum(axis=1, keepdims=True) / N
+            djPk = d_jj - x_kk * (x_kk * d_jj).sum(axis=1, keepdims=True) / N
 
-                # get weight and delta projections
-                di, dj, wi, wj, xk = Delta[i], Delta[j], Wc[i], Wc[j], X[:,k]
-                Pk = PX[k]
-                wiPk = wi @ Pk
-                wjPk = wj @ Pk
-                diPk = di @ Pk
-                djPk = dj @ Pk
+            # accumulate span loss gradient at gamma = 1 (batched)
+            vi, vj = wiPk + diPk, wjPk + djPk
+            vjvj = (vj*vj).sum(axis=1, keepdims=True)
+            vivj = (vi*vj).sum(axis=1, keepdims=True)
+            step_grad_terms = 4 * (vi * vjvj - vivj * vj)
+            v_step_grad = np.zeros(grad.shape) # sanity check gradient at end of step (gamma = 1)
+            for idx, i in enumerate(ii): 
+                v_step_grad[i] += step_grad_terms[idx]
 
-                # accumulate span loss gradient at gamma = 1
-                vi, vj = wiPk + diPk, wjPk + djPk
-                step_grad[i] += 4 * (vi * (vj @ vj) - (vi @ vj) * vj)
+            # accumulate cubic coefficients (batched)
+            diPkdi = (diPk * diPk).sum(axis=1, keepdims=True)
+            djPkdj = (djPk * djPk).sum(axis=1, keepdims=True)
+            diPkdj = (diPk * djPk).sum(axis=1, keepdims=True)
+            djPkdi = diPkdj
 
-                # accumulate cubic coefficients
-                cubic[0] += wjPk @ (wjPk[:,np.newaxis] * wiPk - wiPk[:,np.newaxis] * wjPk) @ diPk
-                cubic[1] += 2*(wjPk @ djPk)*(wiPk @ diPk) + (wjPk @ wjPk)*(diPk @ diPk) \
-                            - (wiPk @ wjPk)*(djPk @ diPk) - (wjPk @ diPk)*(diPk @ wjPk + wiPk @ djPk)
-                cubic[2] += 2*(wjPk @ djPk)*(diPk @ diPk) + (wiPk @ diPk)*(djPk @ djPk) \
-                            - (wjPk @ diPk)*(diPk @ djPk) - (djPk @ diPk)*(diPk @ wjPk + wiPk @ djPk)
-                cubic[3] += djPk @ (djPk[:,np.newaxis] * diPk - diPk[:,np.newaxis] * djPk) @ diPk
+            wiPkdi = (wiPk * diPk).sum(axis=1, keepdims=True)
+            wiPkdj = (wiPk * djPk).sum(axis=1, keepdims=True)
+            wjPkdi = (wjPk * diPk).sum(axis=1, keepdims=True)
+            wjPkdj = (wjPk * djPk).sum(axis=1, keepdims=True)
+            diPkwj = wjPkdi
+            wjPkwi = wiPkwj
+            v_cubic = [
+                np.sum(wjPkwj * wiPkdi - wjPkwi * wjPkdi),
+                np.sum(2 * wjPkdj * wiPkdi + wjPkwj * diPkdi - wiPkwj * djPkdi - wjPkdi * (diPkwj + wiPkdj)),
+                np.sum(2 * wjPkdj * diPkdi + wiPkdi * djPkdj - wjPkdi * diPkdj - djPkdi * (diPkwj + wiPkdj)),
+                np.sum(djPkdj * diPkdi - djPkdi * djPkdi),
+            ]
+
+            # # analytical line search (looped)
+            # cubic = [0, 0, 0, 0] # coefficients of line search derivative (cubic polynomial)
+            # step_grad = np.zeros(grad.shape) # sanity check gradient at end of step (gamma = 1)
+            # for (i,j,k) in Ac:
+
+            #     # get weight and delta projections
+            #     di, dj, wi, wj, xk = Delta[i], Delta[j], Wc[i], Wc[j], X[:,k]
+            #     Pk = PX[k]
+            #     wiPk = wi @ Pk
+            #     wjPk = wj @ Pk
+            #     diPk = di @ Pk
+            #     djPk = dj @ Pk
+
+            #     # accumulate span loss gradient at gamma = 1
+            #     vi, vj = wiPk + diPk, wjPk + djPk
+            #     step_grad[i] += 4 * (vi * (vj @ vj) - (vi @ vj) * vj)
+
+            #     # accumulate cubic coefficients
+            #     cubic[0] += wjPk @ (wjPk[:,np.newaxis] * wiPk - wiPk[:,np.newaxis] * wjPk) @ diPk
+            #     cubic[1] += 2*(wjPk @ djPk)*(wiPk @ diPk) + (wjPk @ wjPk)*(diPk @ diPk) \
+            #                 - (wiPk @ wjPk)*(djPk @ diPk) - (wjPk @ diPk)*(diPk @ wjPk + wiPk @ djPk)
+            #     cubic[2] += 2*(wjPk @ djPk)*(diPk @ diPk) + (wiPk @ diPk)*(djPk @ djPk) \
+            #                 - (wjPk @ diPk)*(diPk @ djPk) - (djPk @ diPk)*(diPk @ wjPk + wiPk @ djPk)
+            #     cubic[3] += djPk @ (djPk[:,np.newaxis] * diPk - diPk[:,np.newaxis] * djPk) @ diPk
+
+            # assert all([np.isclose(cub, v_cub) for (cub, v_cub) in zip(cubic, v_cubic)])
+
+            cubic, step_grad = v_cubic, v_step_grad
 
             cubic = [4*cub for cub in cubic]
 
