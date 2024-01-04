@@ -51,6 +51,7 @@ for b in range(2**8):
         A_ub = Xh[others],
         b_ub = -np.ones(2**8 - 1),
         bounds=(None, None),
+        method='highs',
         # method='simplex',
         )
 

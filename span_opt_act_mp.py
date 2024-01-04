@@ -6,33 +6,17 @@ import matplotlib as mp
 from numpy.linalg import norm
 from numpy.polynomial import Polynomial
 import scipy.sparse as sp
+import scipy.linalg as sl
 from multiprocessing import Pool, cpu_count
 
 from scipy.optimize import linprog, OptimizeWarning
-from scipy.linalg import LinAlgWarning
 import warnings
-warnings.filterwarnings("ignore", category=LinAlgWarning)
+warnings.filterwarnings("ignore", category=sl.LinAlgWarning)
 warnings.filterwarnings("ignore", category=OptimizeWarning)
 
 np.set_printoptions(threshold=10e6)
 
 mp.rcParams['font.family'] = 'serif'
-
-# save one core when multiprocessing
-num_procs = cpu_count()-1
-
-# helper for pooled descent direction linear programs
-def descent_direction(args):
-    c, A_ub, b_ub, A_eq, b_eq = args
-
-    # run the linear program
-    result = linprog(*args,
-        bounds = (None, None),
-        method = 'simplex', # other methods may miss some solutions
-    )
-
-    u_r = result.x
-    return u_r
 
 # @profile
 def main():
@@ -61,6 +45,9 @@ def main():
     for i in Yn:
         K[i] = (Yc[i] != Yn[i]).argmax(axis=1)
 
+    # set up active constraint flags
+    active = np.zeros(Yc.shape, dtype=bool)
+
     # batch set up of projection matrices, PX[k] is matrix for vertex k
     PX = np.eye(N) - X.T.reshape(-1, N, 1) * X.T.reshape(-1, 1, N) / N
 
@@ -79,33 +66,6 @@ def main():
     #     A_sym.append(A_sym_i)
 
     if do_opt:
-
-        # set up constant descent direction args once
-        dd_args = []
-        for r in range(len(W_lp)):
-
-            # # counteract weight norm shrinking
-            # A_eq = W_lp[r:r+1].copy()
-            # b_eq = (A_eq**2).sum(axis=1)
-
-            # # irredundant region constraints (only boundaries)
-            # A_ub = -(X[:,K[r]] * Yc[r, K[r]]).T
-            # b_ub = -np.ones(len(K[r]))*eps
-
-            # counteract weight norm shrinking (growing is okay)
-            A_norms = -W_lp[r:r+1].copy()
-            b_norms = -(A_norms**2).sum(axis=1)
-
-            # irredundant region constraints (only boundaries)
-            A_regions = -(X[:,K[r]] * Yc[r, K[r]]).T
-            b_regions = -np.ones(len(K[r]))*eps
-
-            A_ub = np.concatenate((A_norms, A_regions), axis=0)
-            b_ub = np.concatenate((b_norms, b_regions))
-            A_eq, b_eq = None, None
-
-            # save for later
-            dd_args.append((A_ub, b_ub, A_eq, b_eq))
 
         # optimization metrics
         loss_curve = [] # span loss
@@ -131,9 +91,9 @@ def main():
                 wiPkwi = wiPk @ wiPk
                 wiPkwj = wiPk @ wjPk
                 wjPkwj = wjPk @ wjPk
-                wiPk_n, wjPk_n = norm(wiPk), norm(wjPk)
 
                 # track minimum cosine
+                wiPk_n, wjPk_n = norm(wiPk), norm(wjPk)
                 min_cos = min(min_cos, wiPkwj / (wiPk_n * wjPk_n))
     
                 # accumulate span loss
@@ -142,20 +102,55 @@ def main():
                 # accumulate gradient
                 grad[i] += 4 * (wiPk * wjPkwj - wiPkwj * wjPk)
 
-            # normalize by number of summands
-            loss /= len(Ac)
-            grad /= len(Ac)
+            # # normalize by number of summands
+            # loss /= len(Ac)
+            # grad /= len(Ac)
 
             max_angle = np.arccos(min_cos)
             angle_curve.append(max_angle)
             loss_curve.append(loss)
 
-            # Pooled decent direction calculation
-            args = [(grad[r].copy(),) + args for r,args in enumerate(dd_args)]
-            with Pool(num_procs) as pool:
-                u = pool.map(descent_direction, args)
-            U = np.vstack(u)
-            Delta = U - Wc
+            # # update active constraints
+            # active = active | np.isclose((Wc @ X) * Yc, eps)
+
+            # descent, not ascent
+            Delta = -grad
+
+            # project gradient onto active constraint planes
+            for r in range(Delta.shape[0]):
+
+                # # deactivate constraints satisfied by descent direction
+                # # this is heuristic, not mathematically justified, cycles?
+                # deactivate = ((Delta[r] @ (X[:, active[r]] * Yc[r, active[r]])) > 0)
+                # if deactivate.any():
+                #     # print(r, "deactivate!", deactivate.sum())
+                #     active[r, active[r]] = ~deactivate
+
+                # # keep W_lp plane always active
+                # A_active = np.concatenate((X[:, active[r]], W_lp[r:r+1].T), axis=1)
+
+                # skip projection when no constraints active
+                if active[r].sum() == 0: continue
+
+                A_active = X[:, active[r]]
+
+                # orthonormal basis
+                B_active = sl.orth(A_active)
+
+                if B_active.shape[1] == N: input('active basis full rank...')
+
+                # orthogonal projection onto null space of constraint normals
+                Delta[r] = Delta[r] - B_active @ (B_active.T @ Delta[r])
+
+            # norm of projected gradient (before clip scaling)
+            pgnorm = norm(Delta)
+
+            # clip step to inactive constraints: min_{clip >= 0} of (w + clip*d) @ x*y = eps
+            clips = (eps - (Wc @ X) * Yc) / ((Delta @ X) * Yc)
+            clip_scale = clips[~active & (0 <= clips) & (clips < np.inf)].min()
+            # clip_scale = min(clip_scale, 1.) # avoids magnifying gradient
+            Delta = clip_scale * Delta
+            # print('clip', clip_scale)
 
             # analytical line search
             cubic = [0, 0, 0, 0] # coefficients of line search derivative (cubic polynomial)
@@ -184,19 +179,21 @@ def main():
 
             cubic = [4*cub for cub in cubic]
 
-            # normalize by number of summands
-            cubic = [cub/len(Ac) for cub in cubic]
-            step_grad /= len(Ac)
+            # # normalize by number of summands
+            # cubic = [cub/len(Ac) for cub in cubic]
+            # step_grad /= len(Ac)
 
             # sanity check correct cubic coefficients at gamma = 0 and gamma = 1
             assert np.allclose(cubic[0], (grad * Delta).sum())
             assert np.allclose(sum(cubic), (step_grad * Delta).sum())
 
-            # get extrema of line search objective in [0, 1]
+            # get extrema of line search objective in [0, 1)
             cubic = Polynomial(cubic)
             roots = cubic.roots()
-            gammas = np.append(roots.real, (0., 1.))
+            gammas = np.append(roots.real, (0.,1.,))
             gammas = gammas[(0 <= gammas) & (gammas <= 1)]
+            # gammas = np.append(roots.real, (0.,))
+            # gammas = gammas[(0 <= gammas) & (gammas < 1)]
 
             # evaluate extrema to find global min
             quartic = cubic.integ()
@@ -205,11 +202,16 @@ def main():
 
             # take step
             gamma_curve.append(gamma)
-            Wc = Wc + gamma * Delta # stays in interior as long as 0 <= gamma <= 1
+            Wc = Wc + gamma * Delta # stays in interior as long as 0 <= gamma < 1
 
             # calculate norm of projected gradient
-            pgnorm = np.fabs((grad * Delta).sum()) / norm(Delta)
+            # pgnorm = np.fabs((grad * Delta).sum()) / norm(Delta)
             grad_curve.append(pgnorm)
+
+            # update active constraints
+            if gamma == 1.0: # went all the way to clip, some constraint has been activated
+                active = active | np.isclose((Wc @ X) * Yc, eps)
+            # print('num active', active.sum())
 
             # stop if infeasible, should not happen (but numerical issues when eps = 0)
             if eps > 0:
@@ -222,23 +224,31 @@ def main():
             slack = np.fabs(Wc @ X).min()
             slack_curve.append(slack)
 
-            message = f"{update}/{num_updates}: loss={loss}, angle<={max_angle}), |pgrad|={pgnorm**0.5}, slack={slack}, gamma={gamma}"
+            message = f"{update}/{num_updates}: loss={loss}, angle<={max_angle*180/np.pi}deg, |pgrad|={pgnorm**0.5}, slack={slack}, gamma={gamma}, nactive={active.sum()}"
             print(message)
 
+            # stop if constraint padding violated
+            padded = np.allclose(0, min(((Wc @ X) * Yc - eps).min(), 0))
+            if not padded:
+                print("padding violated", ((Wc @ X) * Yc - eps).min())
+                break
+
             # check stopping criterion
-            early_stop = (gamma == 0.)
+            # early_stop = (gamma == 0.)
+            early_stop = (pgnorm**.5 <= 1e-5) or (gamma <= 1e-15)
+            # early_stop = (pgnorm**.5 <= 1e-5) or (gamma <= 1e-15) or (gamma == 1.)
 
             # save intermediate or final results
             if early_stop or (update + 1 == num_updates) or (update % save_period == 0):
-                with open(f"sq_ccg_ltm_mp_{N}.pkl", "wb") as f:
+                with open(f"span_opt_act_mp_{N}.pkl", "wb") as f:
                     pk.dump((Wc, loss_curve, slack_curve, grad_curve, angle_curve, gamma_curve), f)
 
             if early_stop:
-                print("stopping early, reached gamma=0")
+                print("stopping early")
                 break
 
     # load results
-    with open(f"sq_ccg_ltm_mp_{N}.pkl", "rb") as f:
+    with open(f"span_opt_act_mp_{N}.pkl", "rb") as f:
         (Wc, loss_curve, slack_curve, grad_curve, angle_curve, gamma_curve) = pk.load(f)
 
     # suppress large wall of text for N >= 6
