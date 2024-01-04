@@ -21,28 +21,34 @@ for m,N in zip(markers, Ns):
 
     # load results
     with open(fname, "rb") as f:
-        (Wc, loss_curve, slack_curve, grad_curve, angle_curve, gamma_curve) = pk.load(f)
+        (Wc, log_period, loss_curve, slack_curve, grad_curve, angle_curve, gamma_curve) = pk.load(f)
 
     # remove oscillations around machine precision, looks bad on log scale
     meps = np.finfo(float).eps # machine precision
     loss_curve = np.array(loss_curve)
-    convergence = (loss_curve < meps).argmax() # first point (if any) under machine precision
-    if loss_curve[convergence] < meps: # if any,
-        loss_curve = loss_curve[:convergence] # discard tail around machine precision
+    # convergence = (loss_curve < meps).argmax() # first point (if any) under machine precision
+    # if loss_curve[convergence] < meps: # if any,
+    #     loss_curve = loss_curve[:convergence] # discard tail around machine precision
 
     # convert angles from rad to deg
     angle_curve = np.array(angle_curve) * 180/np.pi
 
     # plot metrics at regularly spaced points on a log scale
-    num_updates = len(loss_curve)
-    steps = np.geomspace(1, num_updates, num_pts).astype(int)
+    # num_updates = len(loss_curve) * log_period
+    # steps = np.geomspace(1, num_updates, num_pts).astype(int)
+    # idxs = steps // log_period
+    num_logged = len(loss_curve)
+    idxs = np.geomspace(1, num_logged, num_pts).astype(int) - 1
+    steps = idxs * log_period + 1
+
+    # print(idxs[-1], grad_curve[idxs[-1]], num_logged, grad_curve[-1])
 
     # print final metrics
     print(f"N={N}: loss->{loss_curve[-1]}, |pgrad|->{grad_curve[-1]}, slack->{slack_curve[-1]}, ang->{angle_curve[-1]}")
 
     # Loss
     pt.sca(axs[0])
-    pt.plot(steps, loss_curve[steps-1], f'k{m}--', mfc='w', label=f"$N={N}$")
+    pt.plot(steps, loss_curve[idxs], f'k{m}--', mfc='w', label=f"$N={N}$")
     pt.title("Span Loss")
     pt.yscale('log')
     pt.xscale('log')
@@ -53,7 +59,7 @@ for m,N in zip(markers, Ns):
 
     # Projected gradient norm
     pt.sca(axs[1])
-    pt.plot(steps, np.array(grad_curve)[steps-1], f'k{m}--', mfc='w', label=f"$N={N}$")
+    pt.plot(steps, np.array(grad_curve)[idxs], f'k{m}--', mfc='w', label=f"$N={N}$")
     pt.title("Projected Gradient Norm")
     pt.yscale('log')
     pt.xscale('log')
@@ -63,14 +69,14 @@ for m,N in zip(markers, Ns):
 
     # Constraint slack
     pt.sca(axs[2])
-    pt.plot(steps, np.array(slack_curve)[steps-1], f'k{m}--', mfc='w', label=f"$N={N}$")
+    pt.plot(steps, np.array(slack_curve)[idxs], f'k{m}--', mfc='w', label=f"$N={N}$")
     pt.title("Constraint Slack")
     pt.xscale('log')
     axs[2].tick_params(axis='y', which='major', right=True)
 
     # Maximum angle
     pt.sca(axs[3])
-    pt.plot(steps, angle_curve[steps-1], f'k{m}--', mfc='w', label=f"$N={N}$")
+    pt.plot(steps, angle_curve[idxs], f'k{m}--', mfc='w', label=f"$N={N}$")
     pt.title("Maximum Angle (deg)")
     pt.yscale('log')
     pt.xscale('log')

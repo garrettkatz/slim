@@ -21,16 +21,17 @@ mp.rcParams['font.family'] = 'serif'
 # @profile
 def main():
 
-    do_opt = True # whether to run the optimization or just load results
-    num_updates = int(1e7) # maximum number of updates if stopping criterion not reached
-    save_period = int(1e4) # number of updates between saving intermediate results
-    eps = 0.1 # constraint slack threshold
-
     # input dimension for optimization
     if len(sys.argv) > 1:
         N = int(sys.argv[1])
     else:
         N = 4
+
+    do_opt = True # whether to run the optimization or just load results
+    num_updates = int(1e7) # maximum number of updates if stopping criterion not reached
+    save_period = int(1e4) # number of updates between saving intermediate results
+    log_period = int(1 if N < 7 else 1e2) # only save every log_period^th update to reduce disk usage
+    eps = 0.1 # constraint slack threshold
 
     # load canonical regions and adjacencies
     ltms = np.load(f"ltms_{N}_c.npz")
@@ -53,6 +54,9 @@ def main():
 
     # save original lp weights
     W_lp = Wc.copy()
+
+    # constraint normal for constant dots with original weights
+    W_lpn = W_lp / norm(W_lp, axis=1, keepdims=True)
 
     # # set up equality constraints for weights invariant to same symmetries as their regions
     # # doesn't converge to zero span loss
@@ -145,7 +149,14 @@ def main():
             # descent, not ascent
             Delta = -grad
 
-            # project gradient onto active constraint planes
+            # always activate original weight dot constraint
+            Delta = Delta - W_lpn * (W_lpn * Delta).sum(axis=1, keepdims=True)
+
+            # # always constant weight norm constraints
+            # Wcn = Wc / norm(Wc, axis=1, keepdims=True)
+            # Delta = Delta - Wcn * (Wcn * Delta).sum(axis=1, keepdims=True)
+
+            # project gradient onto active region constraint planes
             for r in range(Delta.shape[0]):
 
                 # # deactivate constraints satisfied by descent direction
@@ -155,11 +166,8 @@ def main():
                 #     # print(r, "deactivate!", deactivate.sum())
                 #     active[r, active[r]] = ~deactivate
 
-                # # keep W_lp plane always active
-                # A_active = np.concatenate((X[:, active[r]], W_lp[r:r+1].T), axis=1)
-
                 # skip projection when no constraints active
-                if active[r].sum() == 0: continue
+                if not active[r].any(): continue
 
                 A_active = X[:, active[r]]
 
@@ -290,7 +298,7 @@ def main():
             slack = np.fabs(Wc @ X).min()
             slack_curve.append(slack)
 
-            message = f"{update}/{num_updates}: loss={loss}, angle<={max_angle*180/np.pi}deg, |pgrad|={pgnorm**0.5}, slack={slack}, gamma={gamma}, nactive={active.sum()}"
+            message = f"{update}/{num_updates}: loss={loss}, angle<={max_angle*180/np.pi}deg, |pgrad|={pgnorm}, slack={slack}, gamma={gamma}, nactive={active.sum()}"
             print(message)
 
             # stop if constraint padding violated
@@ -301,21 +309,28 @@ def main():
 
             # check stopping criterion
             # early_stop = (gamma == 0.)
-            early_stop = (pgnorm**.5 <= 1e-5) or (gamma <= 1e-15)
-            # early_stop = (pgnorm**.5 <= 1e-5) or (gamma <= 1e-15) or (gamma == 1.)
+            early_stop = (pgnorm <= 1e-10) or (gamma <= 1e-15)
+            # early_stop = (pgnorm <= 1e-10) or (gamma <= 1e-15) or (gamma == 1.)
 
             # save intermediate or final results
             if early_stop or (update + 1 == num_updates) or (update % save_period == 0):
                 with open(f"span_opt_act_mp_{N}.pkl", "wb") as f:
-                    pk.dump((Wc, loss_curve, slack_curve, grad_curve, angle_curve, gamma_curve), f)
+                    # pk.dump((Wc, loss_curve, slack_curve, grad_curve, angle_curve, gamma_curve), f)
+                    pk.dump((Wc, log_period, 
+                        loss_curve[::log_period] + loss_curve[-1:],
+                        slack_curve[::log_period] + slack_curve[-1:],
+                        grad_curve[::log_period] + grad_curve[-1:],
+                        angle_curve[::log_period] + angle_curve[-1:],
+                        gamma_curve[::log_period] + gamma_curve[-1:],
+                    ), f)
 
             if early_stop:
-                print("stopping early")
+                print("early stop condition satisfied")
                 break
 
     # load results
     with open(f"span_opt_act_mp_{N}.pkl", "rb") as f:
-        (Wc, loss_curve, slack_curve, grad_curve, angle_curve, gamma_curve) = pk.load(f)
+        (Wc, log_period, loss_curve, slack_curve, grad_curve, angle_curve, gamma_curve) = pk.load(f)
 
     # suppress large wall of text for N >= 6
     if N < 6:
