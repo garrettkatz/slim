@@ -91,6 +91,6 @@ fig.supxlabel("Optimization Step")
 pt.tight_layout()
 
 # save and show
-pt.savefig(f"sq_ccg_ltm_results.pdf")
+pt.savefig(f"span_opt_act_results.pdf")
 pt.show()
 
