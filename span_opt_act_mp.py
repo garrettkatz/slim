@@ -155,7 +155,7 @@ def main():
 
             # project gradient onto active region constraint planes
             max_region_active_rank = 0
-            any_released = False # release at most one active constraint
+            released = None # index of deactivated constraint if any
             for r in range(Delta.shape[0]):
 
                 # skip region if no constraints active
@@ -172,11 +172,9 @@ def main():
                 lambdas = B @ Delta[r]
 
                 # release a constraint when possible
-                not_released_yet = (not any_released) # only one per iteration
+                not_released_yet = (released == None) # but only one per iteration
                 furk = (rk == A.shape[1]) # full-rank regularity condition
-                # mult = (rk > 1) # at least two active if one is to be released
-                # if not any_released and furk and mult:
-                if not any_released and furk:
+                if not_released_yet and furk:
 
                     # if any multipliers > 0, max one is
                     max_idx = lambdas.argmax()
@@ -188,7 +186,7 @@ def main():
                         # deactivate
                         nz = np.flatnonzero(active[r])
                         active[r, nz[max_idx]] = False
-                        any_released = True
+                        released = (r, nz[max_idx])
 
                         # recompute pseudoinverse
                         if A.shape[1] > 1:
@@ -207,62 +205,28 @@ def main():
                 # orthogonal projection onto active constraint boundaries
                 Delta[r] = Delta[r] - A @ (B @ Delta[r]) # pinv version
 
-                # # always activate original weight dot constraint
-                # # A = B = W_lpn[r:r+1].T # orth version
-                # A, B = W_lpn[r:r+1].T, W_lpn[r:r+1] # orth version
-                # rk = 1
-
-                # # also include any active region constraints
-                # if active[r].any():
-                #     # A = np.concatenate((A, X[:, active[r]]), axis=1)
-                #     # B = sl.orth(A)
-                #     # rk = B.shape[1]
-
-                #     A = np.concatenate((A, X[:, active[r]] * Yc[r, active[r]]), axis=1)
-                #     B, rk = sl.pinv(A, return_rank=True)
-
-                #     # release a constraint when possible
-                #     not_released_yet = (not any_released) # only one per iteration
-                #     furk = (rk == A.shape[1]) # full-rank regularity condition
-                #     multi = (A.shape[1] > 2) # don't release all active inequalities, need at least two
-                #     if not any_released and rk == A.shape[1] and multi:
-                #     # if rk == A.shape[1] and multi:
-
-                #         # if any positive coefficients, release one (the max) of them
-                #         lambdas = (B @ Delta[r])
-                #         max_idx = np.argmax(lambdas[1:]) # skip original dot constraint
-                #         max_lambda = lambdas[max_idx+1] # skipped original dot constraint
-                #         if max_lambda > 1e-7: # should be clearly positive, not just round-off
-
-                #             # mark inactive
-                #             nz = np.flatnonzero(active[r])
-                #             active[r, nz[max_idx]] = False
-                #             any_released = True
-                #             print('released', r, nz[max_idx], max_idx+1, max_lambda)
-                #             print(lambdas)
-
-                #             # recompute projection, skipped original dot constraint
-                #             A = np.concatenate((A[:, :max_idx+1], A[:, max_idx+2:]), axis=1)
-                #             B, rk = sl.pinv(A, return_rank=True)
-
-                #     if rk == N: input('active basis full rank...')
-                #     if rk < A.shape[1]: input("linearly dependent active set...")
-
-                # max_region_active_rank = max(max_region_active_rank, rk)
-
-                # # # orthogonal projection onto null space of constraint normals
-                # # Delta[r] = Delta[r] - B @ (B.T @ Delta[r]) # orth version
-                # Delta[r] = Delta[r] - A @ (B @ Delta[r]) # pinv version
-
             # norm of projected gradient (before clip scaling)
             pgnorm = norm(Delta)
 
-            # clip step to inactive constraints: min_{clip >= 0} of (w + clip*d) @ x*y = eps
+            # get clip scalars for all constraints where (w + clip*d) @ x*y = eps
             clips = (eps - (Wc @ X) * Yc) / ((Delta @ X) * Yc)
-            clip_scale = clips[~active & (0 <= clips) & (clips < np.inf)].min()
-            # clip_scale = min(clip_scale, 1.) # avoids magnifying gradient
+
+            # only clip to inactive constraints in the positive Delta direction
+            clip_candidates = ~active & (0 <= clips) & (clips < np.inf)
+
+            # ignore round-off errors in any just-deactivated constraint
+            if released is not None: clip_candidates[released] = False
+
+            # rescale Delta to closest clip, if any
+            clips = clips[clip_candidates]
+            if len(clips) > 0:
+                clip_scale = clips.min()
+                # clip_scale = min(clip_scale, 1.) # avoids magnifying gradient
+            else:
+                clip_scale = 1
+
             Delta = clip_scale * Delta
-            # print('clip', clip_scale)
+            # print('clip', clip_scale) #, clips[1719, 86])
 
             # analytical line search (batched)
             d_ii, d_jj = Delta[ii], Delta[jj]
@@ -366,7 +330,8 @@ def main():
             # update active constraints
             if gamma == 1.0: # went all the way to clip, some constraint has been activated
                 newact = np.nonzero(np.isclose((Wc @ X) * Yc, eps) > active)
-                print('prev active', active.sum(), newact)
+                slacks = (Wc @ X) * Yc - eps
+                print('prev active', active.sum(), newact, slacks[newact], np.sort(slacks.flatten())[:3])
                 active = active | np.isclose((Wc @ X) * Yc, eps)
 
             # stop if infeasible, should not happen (but numerical issues when eps = 0)
