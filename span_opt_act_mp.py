@@ -65,7 +65,8 @@ def main():
             A_ub = A_ub,
             b_ub = b_ub,
             bounds = (None, None),
-            method='simplex', # other methods miss some solutions
+            # method='simplex', # other methods miss some solutions?
+            method='highs', # guarded by following assertions
         )
         w = result.x
 
