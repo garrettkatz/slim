@@ -149,24 +149,110 @@ def main():
             # descent, not ascent
             Delta = -grad
 
+            # apply original weight dot equality constraint to Delta
+            # must also project region constraints onto it
+            Delta = Delta - W_lpn * (W_lpn * Delta).sum(axis=1, keepdims=True)
+
             # project gradient onto active region constraint planes
             max_region_active_rank = 0
+            any_released = False # release at most one active constraint
             for r in range(Delta.shape[0]):
 
-                # always activate original weight dot constraint
-                A = B = W_lpn[r:r+1].T
+                # skip region if no constraints active
+                if not active[r].any(): continue
 
-                # also include any active region constraints
-                if active[r].any():
-                    A = np.concatenate((A, X[:, active[r]]), axis=1)
-                    B = sl.orth(A)
-                    if B.shape[1] == N: input('active basis full rank...')
-                    if B.shape[1] < A.shape[1]: print("linearly dependent active set...")
+                # get active constraint normals
+                A = X[:, active[r]] * Yc[r, active[r]]
 
-                max_region_active_rank = max(max_region_active_rank, B.shape[1])
+                # project normals onto original weight dot constraint
+                A = A - W_lpn[r:r+1].T * (W_lpn[r:r+1] @ A)
 
-                # orthogonal projection onto null space of constraint normals
-                Delta[r] = Delta[r] - B @ (B.T @ Delta[r])
+                # get pseudoinverse for multipliers
+                B, rk = sl.pinv(A, return_rank=True)
+                lambdas = B @ Delta[r]
+
+                # release a constraint when possible
+                not_released_yet = (not any_released) # only one per iteration
+                furk = (rk == A.shape[1]) # full-rank regularity condition
+                # mult = (rk > 1) # at least two active if one is to be released
+                # if not any_released and furk and mult:
+                if not any_released and furk:
+
+                    # if any multipliers > 0, max one is
+                    max_idx = lambdas.argmax()
+                    max_lam = lambdas[max_idx]
+
+                    # one positive multiplier's constraint can be released
+                    if max_lam > 1e-7: # clearly positive, not just round-off noise
+
+                        # deactivate
+                        nz = np.flatnonzero(active[r])
+                        active[r, nz[max_idx]] = False
+                        any_released = True
+
+                        # recompute pseudoinverse
+                        if A.shape[1] > 1:
+                            A = np.concatenate((A[:, :max_idx], A[:, max_idx+1:]), axis=1)
+                            B, rk = sl.pinv(A, return_rank=True)
+                        else:
+                            # a single active constraint was removed, nothing to project away
+                            A = np.zeros((N, 1))
+                            B = A.T
+
+                if rk == N-1: input('active basis full rank...')
+                if not furk: input("linearly dependent active constraints...")
+
+                max_region_active_rank = max(max_region_active_rank, rk)
+
+                # orthogonal projection onto active constraint boundaries
+                Delta[r] = Delta[r] - A @ (B @ Delta[r]) # pinv version
+
+                # # always activate original weight dot constraint
+                # # A = B = W_lpn[r:r+1].T # orth version
+                # A, B = W_lpn[r:r+1].T, W_lpn[r:r+1] # orth version
+                # rk = 1
+
+                # # also include any active region constraints
+                # if active[r].any():
+                #     # A = np.concatenate((A, X[:, active[r]]), axis=1)
+                #     # B = sl.orth(A)
+                #     # rk = B.shape[1]
+
+                #     A = np.concatenate((A, X[:, active[r]] * Yc[r, active[r]]), axis=1)
+                #     B, rk = sl.pinv(A, return_rank=True)
+
+                #     # release a constraint when possible
+                #     not_released_yet = (not any_released) # only one per iteration
+                #     furk = (rk == A.shape[1]) # full-rank regularity condition
+                #     multi = (A.shape[1] > 2) # don't release all active inequalities, need at least two
+                #     if not any_released and rk == A.shape[1] and multi:
+                #     # if rk == A.shape[1] and multi:
+
+                #         # if any positive coefficients, release one (the max) of them
+                #         lambdas = (B @ Delta[r])
+                #         max_idx = np.argmax(lambdas[1:]) # skip original dot constraint
+                #         max_lambda = lambdas[max_idx+1] # skipped original dot constraint
+                #         if max_lambda > 1e-7: # should be clearly positive, not just round-off
+
+                #             # mark inactive
+                #             nz = np.flatnonzero(active[r])
+                #             active[r, nz[max_idx]] = False
+                #             any_released = True
+                #             print('released', r, nz[max_idx], max_idx+1, max_lambda)
+                #             print(lambdas)
+
+                #             # recompute projection, skipped original dot constraint
+                #             A = np.concatenate((A[:, :max_idx+1], A[:, max_idx+2:]), axis=1)
+                #             B, rk = sl.pinv(A, return_rank=True)
+
+                #     if rk == N: input('active basis full rank...')
+                #     if rk < A.shape[1]: input("linearly dependent active set...")
+
+                # max_region_active_rank = max(max_region_active_rank, rk)
+
+                # # # orthogonal projection onto null space of constraint normals
+                # # Delta[r] = Delta[r] - B @ (B.T @ Delta[r]) # orth version
+                # Delta[r] = Delta[r] - A @ (B @ Delta[r]) # pinv version
 
             # norm of projected gradient (before clip scaling)
             pgnorm = norm(Delta)
@@ -252,24 +338,22 @@ def main():
 
             # get extrema of line search objective in [0, 1)
             cubic = Polynomial(cubic)
-            print('cubic', cubic)
+            # print('cubic', cubic)
             roots = cubic.roots()
             gammas = np.append(roots.real, (0.,1.,))
-            print(gammas)
+            # print(gammas)
             gammas = gammas[(0 <= gammas) & (gammas <= 1)]
-            print(gammas)
+            # print(gammas)
             # gammas = np.append(roots.real, (0.,))
             # gammas = gammas[(0 <= gammas) & (gammas < 1)]
 
             # evaluate extrema to find global min
             quartic = cubic.integ()
-            print('quartic', quartic)
+            # print('quartic', quartic)
             evals = gammas[:,np.newaxis]**np.arange(5) @ quartic.coef
-            print(evals)
             gamma = gammas[evals.argmin()]
-
-            print(gammas)
-            print(evals)
+            # print(gammas)
+            # print(evals)
 
             # take step
             gamma_curve.append(gamma)
@@ -281,8 +365,9 @@ def main():
 
             # update active constraints
             if gamma == 1.0: # went all the way to clip, some constraint has been activated
+                newact = np.nonzero(np.isclose((Wc @ X) * Yc, eps) > active)
+                print('prev active', active.sum(), newact)
                 active = active | np.isclose((Wc @ X) * Yc, eps)
-            # print('num active', active.sum())
 
             # stop if infeasible, should not happen (but numerical issues when eps = 0)
             if eps > 0:
@@ -295,8 +380,8 @@ def main():
             slack = np.fabs(Wc @ X).min()
             slack_curve.append(slack)
 
-            message = f"{update}/{num_updates}: loss={loss}, angle<={max_angle*180/np.pi}deg, |pgrad|={pgnorm}, slack={slack}, gamma={gamma}, nactive={active.sum()} (rk <= {max_region_active_rank})"
-            print('delta dot grad = ', (Delta * grad).sum())
+            message = f"{update}/{num_updates}: loss={loss:#.10g}, angle<={max_angle*180/np.pi:#.10g}deg, |pgrad|={pgnorm:#.10g}, slack={slack:#.10g}, gamma={gamma:#.10g}, nactive={active.sum()} (rk <= {max_region_active_rank})"
+            # print('delta dot grad = ', (Delta * grad).sum())
             print(message)
 
             # stop if constraint padding violated
@@ -307,7 +392,7 @@ def main():
 
             # check stopping criterion
             # early_stop = (gamma == 0.)
-            early_stop = (pgnorm <= 1e-10) or (gamma <= 1e-15)
+            early_stop = (pgnorm <= 1e-5) or (gamma <= 1e-15)
             # early_stop = (pgnorm <= 1e-10) or (gamma <= 1e-15) or (gamma == 1.)
 
             # save intermediate or final results
@@ -324,7 +409,7 @@ def main():
 
             if early_stop:
                 print("early stop condition satisfied")
-                print('delta dot grad = ', (Delta * grad).sum())
+                print('delta dot grad =', (Delta * grad).sum())
                 break
 
     # load results
