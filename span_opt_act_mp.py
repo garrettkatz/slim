@@ -46,6 +46,35 @@ def main():
     for i in Yn:
         K[i] = (Yc[i] != Yn[i]).argmax(axis=1)
 
+    # inject noise into initial points
+    for i in range(Wc.shape[0]):
+
+        # region constraints
+        A_ub = -(X[:, K[i]] * Yc[i, K[i]]).T
+        b_ub = -np.ones(A_ub.shape[0])
+
+        # noise injection
+        b_ub -= np.random.rand(*b_ub.shape)
+
+        # make the problem bounded
+        c = -A_ub.sum(axis=0)
+
+        # run the linear program
+        result = linprog(
+            c = c,
+            A_ub = A_ub,
+            b_ub = b_ub,
+            bounds = (None, None),
+            method='simplex', # other methods miss some solutions
+        )
+        w = result.x
+
+        # double-check
+        assert w is not None
+        assert (np.sign(w @ X) == Yc[i]).all()
+
+        Wc[i] = w
+
     # set up active constraint flags
     active = np.zeros(Yc.shape, dtype=bool)
 
