@@ -149,35 +149,24 @@ def main():
             # descent, not ascent
             Delta = -grad
 
-            # always activate original weight dot constraint
-            Delta = Delta - W_lpn * (W_lpn * Delta).sum(axis=1, keepdims=True)
-
-            # # always constant weight norm constraints
-            # Wcn = Wc / norm(Wc, axis=1, keepdims=True)
-            # Delta = Delta - Wcn * (Wcn * Delta).sum(axis=1, keepdims=True)
-
             # project gradient onto active region constraint planes
+            max_region_active_rank = 0
             for r in range(Delta.shape[0]):
 
-                # # deactivate constraints satisfied by descent direction
-                # # this is heuristic, not mathematically justified, cycles?
-                # deactivate = ((Delta[r] @ (X[:, active[r]] * Yc[r, active[r]])) > 0)
-                # if deactivate.any():
-                #     # print(r, "deactivate!", deactivate.sum())
-                #     active[r, active[r]] = ~deactivate
+                # always activate original weight dot constraint
+                A = B = W_lpn[r:r+1].T
 
-                # skip projection when no constraints active
-                if not active[r].any(): continue
+                # also include any active region constraints
+                if active[r].any():
+                    A = np.concatenate((A, X[:, active[r]]), axis=1)
+                    B = sl.orth(A)
+                    if B.shape[1] == N: input('active basis full rank...')
+                    if B.shape[1] < A.shape[1]: print("linearly dependent active set...")
 
-                A_active = X[:, active[r]]
-
-                # orthonormal basis
-                B_active = sl.orth(A_active)
-
-                if B_active.shape[1] == N: input('active basis full rank...')
+                max_region_active_rank = max(max_region_active_rank, B.shape[1])
 
                 # orthogonal projection onto null space of constraint normals
-                Delta[r] = Delta[r] - B_active @ (B_active.T @ Delta[r])
+                Delta[r] = Delta[r] - B @ (B.T @ Delta[r])
 
             # norm of projected gradient (before clip scaling)
             pgnorm = norm(Delta)
@@ -263,16 +252,24 @@ def main():
 
             # get extrema of line search objective in [0, 1)
             cubic = Polynomial(cubic)
+            print('cubic', cubic)
             roots = cubic.roots()
             gammas = np.append(roots.real, (0.,1.,))
+            print(gammas)
             gammas = gammas[(0 <= gammas) & (gammas <= 1)]
+            print(gammas)
             # gammas = np.append(roots.real, (0.,))
             # gammas = gammas[(0 <= gammas) & (gammas < 1)]
 
             # evaluate extrema to find global min
             quartic = cubic.integ()
+            print('quartic', quartic)
             evals = gammas[:,np.newaxis]**np.arange(5) @ quartic.coef
+            print(evals)
             gamma = gammas[evals.argmin()]
+
+            print(gammas)
+            print(evals)
 
             # take step
             gamma_curve.append(gamma)
@@ -298,7 +295,8 @@ def main():
             slack = np.fabs(Wc @ X).min()
             slack_curve.append(slack)
 
-            message = f"{update}/{num_updates}: loss={loss}, angle<={max_angle*180/np.pi}deg, |pgrad|={pgnorm}, slack={slack}, gamma={gamma}, nactive={active.sum()}"
+            message = f"{update}/{num_updates}: loss={loss}, angle<={max_angle*180/np.pi}deg, |pgrad|={pgnorm}, slack={slack}, gamma={gamma}, nactive={active.sum()} (rk <= {max_region_active_rank})"
+            print('delta dot grad = ', (Delta * grad).sum())
             print(message)
 
             # stop if constraint padding violated
@@ -326,6 +324,7 @@ def main():
 
             if early_stop:
                 print("early stop condition satisfied")
+                print('delta dot grad = ', (Delta * grad).sum())
                 break
 
     # load results
@@ -333,20 +332,23 @@ def main():
         (Wc, log_period, loss_curve, slack_curve, grad_curve, angle_curve, gamma_curve) = pk.load(f)
 
     # suppress large wall of text for N >= 6
-    if N < 6:
-        np.set_printoptions(formatter={'float': lambda x: "%+0.2f" % x})
+    np.set_printoptions(formatter={'float': lambda x: "%+0.2f" % x})
 
-        print("\n" + "*"*8 + " change in weights " + "*"*8 + "\n")
-    
-        for i in range(len(Wc)):
-            print(W_lp[i], Wc[i], np.fabs(Wc[i] @ X).min())
-    
-        print("\n" + "*"*8 + " span coefficients and residuals " + "*"*8 + "\n")
-        print("wi ~ a * wj + b * xk, yik, resid, ijk")
-        for (i, j, k) in Ac:
-            ab = np.linalg.lstsq(np.vstack((Wc[j], X[:,k])).T, Wc[i], rcond=None)[0]
-            resid = np.fabs(Wc[i] - (ab[0]*Wc[j] + ab[1]*X[:,k])).max()
-            print(Wc[i], ab[0], Wc[j], ab[1], X[:,k], Yc[i,k], resid, i,j,k)
+    if N < 6: print("\n" + "*"*8 + " change in weights " + "*"*8 + "\n")
+
+    for i in range(len(Wc)):
+        if N < 6: print(W_lp[i], Wc[i], np.fabs(Wc[i] @ X).min())
+
+    if N < 6: print("\n" + "*"*8 + " span coefficients and residuals " + "*"*8 + "\n")
+    if N < 6: print("wi ~ a * wj + b * xk, yik, resid, ijk")
+    max_resid = 0
+    for (i, j, k) in Ac:
+        ab = np.linalg.lstsq(np.vstack((Wc[j], X[:,k])).T, Wc[i], rcond=None)[0]
+        resid = np.fabs(Wc[i] - (ab[0]*Wc[j] + ab[1]*X[:,k])).max()
+        max_resid = max(max_resid, resid)
+        if N < 6: print(Wc[i], ab[0], Wc[j], ab[1], X[:,k], Yc[i,k], resid, i,j,k)
+
+    print("\nMax a,b residual of solution:", max_resid)
 
 if __name__ == "__main__": main()
 
