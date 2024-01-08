@@ -7,8 +7,8 @@ import pickle as pk
 mpl.rcParams['font.family'] = 'serif'
 mpl.rcParams['text.usetex'] = True
 
-Ns = [4,5,6,7]
-markers = '^sod' # markers for each N
+Ns = [4,5,6,7,8]
+markers = '^sod+' # markers for each N
 num_pts = 10 # number of regularly spaced points plotted for each metric
 
 fig, axs = pt.subplots(1, 4, figsize=(10, 2.75))
