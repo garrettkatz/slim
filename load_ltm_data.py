@@ -1,10 +1,14 @@
 import numpy as np
 import pickle as pk
 
-# returns dicts Yc[N], W[N], X[N], Ac[N] by N
+# If Ns is a list, returns dicts Yc[N], W[N], X[N], Ac[N] by N
+# If Ns is an integer N, returns Yc, W, X, Ac for that N
 def load_ltm_data(Ns):
-    Yc, W, X, Ac = {}, {}, {}, {}
 
+    singleton = (type(Ns) == int)
+    if singleton: Ns = [Ns]
+
+    Yc, W, X, Ac = {}, {}, {}, {}
     for N in Ns:
 
         # load canonical hemis
@@ -13,7 +17,10 @@ def load_ltm_data(Ns):
 
         with open(f"adjs_{N}_jc.npz", "rb") as f: Ac[N] = pk.load(f)
 
-    return Yc, W, X, Ac
+    if singleton:
+        return Yc[Ns[0]], W[Ns[0]], X[Ns[0]], Ac[Ns[0]] 
+    else:
+        return Yc, W, X, Ac
 
 # organize adjacencies by source region
 # Ac: set { ... (i,j,k) ... } of canonical adjacencies, as saved in adjs_{N}_jc.npz
