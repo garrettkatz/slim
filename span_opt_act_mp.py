@@ -46,35 +46,38 @@ def main():
     for i in Yn:
         K[i] = (Yc[i] != Yn[i]).argmax(axis=1)
 
-    # inject noise into initial points
-    for i in range(Wc.shape[0]):
+    # use initial weights from canon_lprog_ab_necessary soln
+    Wc = np.load(f"canon_lprog_ab_necessary_{N}_GLPK_ab.npy")
 
-        # region constraints
-        A_ub = -(X[:, K[i]] * Yc[i, K[i]]).T
-        b_ub = -np.ones(A_ub.shape[0])
+    # # use randomly perturbed initial weights
+    # for i in range(Wc.shape[0]):
 
-        # noise injection
-        b_ub -= np.random.rand(*b_ub.shape)
+    #     # region constraints
+    #     A_ub = -(X[:, K[i]] * Yc[i, K[i]]).T
+    #     b_ub = -np.ones(A_ub.shape[0])
 
-        # make the problem bounded
-        c = -A_ub.sum(axis=0)
+    #     # noise injection
+    #     b_ub -= np.random.rand(*b_ub.shape)
 
-        # run the linear program
-        result = linprog(
-            c = c,
-            A_ub = A_ub,
-            b_ub = b_ub,
-            bounds = (None, None),
-            # method='simplex', # other methods miss some solutions?
-            method='highs', # guarded by following assertions
-        )
-        w = result.x
+    #     # make the problem bounded
+    #     c = -A_ub.sum(axis=0)
 
-        # double-check
-        assert w is not None
-        assert (np.sign(w @ X) == Yc[i]).all()
+    #     # run the linear program
+    #     result = linprog(
+    #         c = c,
+    #         A_ub = A_ub,
+    #         b_ub = b_ub,
+    #         bounds = (None, None),
+    #         # method='simplex', # other methods miss some solutions?
+    #         method='highs', # guarded by following assertions
+    #     )
+    #     w = result.x
 
-        Wc[i] = w
+    #     # double-check
+    #     assert w is not None
+    #     assert (np.sign(w @ X) == Yc[i]).all()
+
+    #     Wc[i] = w
 
     # set up active constraint flags
     active = np.zeros(Yc.shape, dtype=bool)
