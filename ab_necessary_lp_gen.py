@@ -29,11 +29,16 @@ def main():
     with open(f"adjs_{N}_c.npz", "rb") as f: (Yn, _) = pk.load(f)
 
     # number of regions
-    R = Yc.shape[0]
+    # R = Yc.shape[0]
 
-    # set up boundary indices to remove redundant region constraints
-    K = {}
-    for i in Yn: K[i] = (Yc[i] != Yn[i]).argmax(axis=1)
+    # # set up boundary indices to remove redundant region constraints
+    # K = {}
+    # for i in Yn: K[i] = (Yc[i] != Yn[i]).argmax(axis=1)
+
+    # reduce tree size with a subset of dichotomies
+    msg = f"Yc {Yc.shape[0]} to: "
+    Yc = Yc[:300]
+    print(msg + str(Yc.shape[0]))
 
     # set up permutation of vertices
     perm = np.arange(X.shape[1]) # identity permutation
@@ -43,9 +48,7 @@ def main():
     print("Building tree...")
     nodes = [(None, np.empty((N,0)), np.empty(0))] # parent index, x data, y data
     lookup = {nodes[0][2].tobytes(): 0} # maps y data bytes to node index
-    max_k = X.shape[1] if N < 8 else 2*X.shape[1]//3 # limit size of optimization problem
-    try halving Y.shape[0] instead of X, full dichotomies but fewer of them
-    for k in range(1, max_k):
+    for k in range(1, Yc.shape[1]):
 
         # current set of input examples
         Xk = X[:,perm[:k]]
@@ -65,6 +68,9 @@ def main():
             # save the node
             nodes.append((p, Xk, yk))
             lookup[yk.tobytes()] = n
+
+        # stop once all dichotomies have been reached
+        if Yk.shape[0] == Yc.shape[0]: break
 
     # for n, (p, x, y) in enumerate(nodes): print(n, p, x.shape, y)
     # input('.')
