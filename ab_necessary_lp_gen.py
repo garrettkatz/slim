@@ -16,6 +16,8 @@ def main():
     do_opt = True
     verbose = True
     eps = 1
+    subsize = 30
+    try building forest backwards from full dichots with the most constraints
 
     # input dimension for optimization
     if len(sys.argv) > 1:
@@ -36,9 +38,10 @@ def main():
     # for i in Yn: K[i] = (Yc[i] != Yn[i]).argmax(axis=1)
 
     # reduce tree size with a subset of dichotomies
-    msg = f"Yc {Yc.shape[0]} to: "
-    Yc = Yc[:300]
-    print(msg + str(Yc.shape[0]))
+    msg = f"Yc {Yc.shape} to "
+    subsamp = np.random.choice(Yc.shape[0], size=subsize, replace=False)
+    Yc = Yc[subsamp]
+    print(msg + str(Yc.shape))
 
     # set up permutation of vertices
     perm = np.arange(X.shape[1]) # identity permutation
