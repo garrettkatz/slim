@@ -9,9 +9,9 @@ import load_ltm_data as ld
 def main():
 
     # solver = 'GLPK'
-    solver = 'CBC'
+    # solver = 'CBC'
     # solver = 'GLOP'
-    # solver = 'SCIPY'
+    solver = 'SCIPY'
 
     do_opt = True
     verbose = True
@@ -36,7 +36,7 @@ def main():
     for i in Yn: K[i] = (Yc[i] != Yn[i]).argmax(axis=1)
 
     # compute adjacency graph spanning tree
-    # i0 = 0 # root region
+    # i0 = 0
     i0 = 1 # region containing identity row weight vector
     queue = deque([(i0, None)]) # (region, edge that reached it)
     explored = {} # {region: edge that reached it}
@@ -44,17 +44,16 @@ def main():
         i, a = queue.popleft() # BFS
         if i in explored: continue
         explored[i] = a
-        # print(f"{len(explored)} of {Yc.shape[0]} explored")
         for (j,k) in A[i]: queue.append((j, (i,j,k)))
 
-    # At = explored
+    # List all the edges in the spanning tree
     At = [a for a in explored.values() if a is not None]
     print(f"|Ac|={len(Ac)}, |At|={len(At)}, R = {R}")
     # print(At)
 
     ## variables
     w = cp.Variable((R, N)) # weight vector per region
-    β = cp.Variable(len(At)) # beta per spanning tree edge
+    β = cp.Variable(len(At)) # beta per spanning tree edge (R-1 excluding root)
 
     ## region constraints
     region_constraints = [
@@ -88,11 +87,10 @@ def main():
                 break
             with open(fname, 'wb') as f: pk.dump((problem.status, w.value, β.value), f)
     
+    # show the last optimization result that was feasible
     with open(fname, 'rb') as f: status, w, β = pk.load(f)
-
     if w is not None: print(w.round(3))
     if β is not None: print(β.round(3))
-
     print(status)
 
 

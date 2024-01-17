@@ -13,7 +13,7 @@ def main():
     # solver = 'GLOP'
     solver = 'SCIPY'
 
-    do_opt = False
+    do_opt = True
     verbose = True
     eps = 1
 
@@ -35,60 +35,72 @@ def main():
     K = {}
     for i in Yn: K[i] = (Yc[i] != Yn[i]).argmax(axis=1)
 
-    # compute adjacency graph spanning tree
-    i0 = 0 # root region
-    nodes = []
-    queue = deque([(i0, None, np.empty((N,0)))]) # (node region, parent node index, examples on path to it)
-    explored = set() # regions that have been popped
-    while len(queue) > 0:
-        # pop queued nodes in BFS order
-        i, p, xy = queue.popleft()
+    # set up permutation of vertices
+    perm = np.arange(X.shape[1]) # identity permutation
+    # perm = np.random.permutation(X.shape[1]) # random
 
-        # save new node for new path to this region
-        nodes.append( (p, xy) )
-        n = len(nodes) - 1 # index of new node
+    # build binary label tree
+    print("Building tree...")
+    nodes = [(None, np.empty((N,0)), np.empty(0))] # parent index, x data, y data
+    lookup = {nodes[0][2].tobytes(): 0} # maps y data bytes to node index
+    max_k = X.shape[1] if N < 8 else 2*X.shape[1]//3 # limit size of optimization problem
+    try halving Y.shape[0] instead of X, full dichotomies but fewer of them
+    for k in range(1, max_k):
 
-        # but don't expand children more than once
-        if i in explored: continue
+        # current set of input examples
+        Xk = X[:,perm[:k]]
 
-        # mark new regions as explored and expand children
-        explored.add(i)
-        for (j,k) in A[i]:
+        # all output label possibilities
+        Yk = np.unique(Yc[:, perm[:k]], axis=0)
 
-            # don't include children that repeat/undo previous examples
-            if (xy == +X[:,k:k+1]).all(axis=0).any(): continue
-            if (xy == -X[:,k:k+1]).all(axis=0).any(): continue
+        # each possibility has a node at depth k
+        for i, yk in enumerate(Yk):
 
-            # queue nodes for new examples
-            xy_new = np.concatenate((xy, X[:,k:k+1]*Yc[j,k]), axis=1)
-            queue.append((j, n, xy_new))
+            # parent index
+            p = lookup[yk[:-1].tobytes()]
 
-    # All nodes in spanning tree
-    print(f"|Ac|={len(Ac)}, |tree|={len(nodes)}, R = {R}")
-    # print(At)
+            # new node index
+            n = len(nodes)
 
-    for n, (p, xy) in enumerate(nodes): print(n, p, xy.shape)
-    input('.')
+            # save the node
+            nodes.append((p, Xk, yk))
+            lookup[yk.tobytes()] = n
+
+    # for n, (p, x, y) in enumerate(nodes): print(n, p, x.shape, y)
+    # input('.')
+
+    # tree edge data
+    At = [
+        (n, p, x[:,-1], y[-1])
+        for n, (p, x, y) in enumerate(nodes)
+        if p is not None]
+
+    print(f"{len(nodes)} nodes, {len(At)} edges")
 
     ## variables
-    w = cp.Variable((len(nodes), N)) # weight vector per spanning tree node
-    β = cp.Variable(len(nodes)) # beta per spanning tree edge (0 at root)
+    w = cp.Variable((len(nodes), N)) # weight vector per node
+    β = cp.Variable(len(At)) # beta per spanning tree edge (nodes - 1)
 
-    ## sample constraints
+    ## data constraints
+    print("Building sample constraints...")
     sample_constraints = [
-        w[n:n+1] @ xy >= eps
-        for n, (p, xy) in enumerate(nodes) if p is not None]
+        w[n:n+1] @ (Xk * yk) >= eps
+        for n, (p, Xk, yk) in enumerate(nodes)
+        if p is not None] # no constraints on root
 
     ## span constraints
+    print("Building span constraints...")
     span_constraints = [
-        w[n] == w[p] + β[n] * xy[:,-1]
-        for n, (p, xy) in enumerate(nodes) if p is not None]
+        w[n] == w[p] + β[e] * (x * y)
+        for e, (n,p,x,y) in enumerate(At)]
 
     ## objective to bound problem
-    c = np.zeros((len(nodes), N))
-    for n, (p, xy) in enumerate(nodes):
-        if p is not None: c[n] = xy.mean(axis=1)
-    objective = cp.Minimize(cp.sum(cp.multiply(w, c)))
+    print("Building objective...")
+    c = np.stack([
+        (Xk * yk).mean(axis=1)
+        for (p, Xk, yk) in nodes
+        if p is not None])
+    objective = cp.Minimize(cp.sum(cp.multiply(w[1:], c)))
 
     # saved results here
     fname = f"ab_necessary_lp_gen_{N}_{solver}.pkl"

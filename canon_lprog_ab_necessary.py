@@ -7,7 +7,7 @@ import load_ltm_data as ld
 # @profile
 def main():
 
-    do_opt = False
+    do_opt = True
 
     # input dimension for optimization
     if len(sys.argv) > 1:
@@ -15,7 +15,8 @@ def main():
     else:
         N = 8
 
-    solver = 'GLPK'
+    # solver = 'GLPK'
+    solver = 'SCIPY'
     do_ab = True
 
     # load canonical regions and adjacencies
