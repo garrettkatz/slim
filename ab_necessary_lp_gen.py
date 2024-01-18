@@ -16,7 +16,7 @@ def main():
     do_opt = True
     verbose = True
     eps = 1
-    subsize = 2000
+    subsize = 3000
 
     # input dimension for optimization
     if len(sys.argv) > 1:
@@ -126,6 +126,8 @@ def main():
     #     if p is not None])
     # objective = cp.Minimize(cp.sum(cp.multiply(w[1:], c)))
 
+    # constraints = sample_constraints + span_constraints
+
     ### root weight variable version
 
     ## variables
@@ -172,7 +174,7 @@ def main():
     if do_opt:
 
         input("Press Enter to do opt")
-        problem = cp.Problem(objective, sample_constraints + span_constraints)
+        problem = cp.Problem(objective, constraints)
         problem.solve(solver=solver, verbose=True)
         with open(fname, 'wb') as f: pk.dump((subset, problem.status, w.value, β.value), f)
     
