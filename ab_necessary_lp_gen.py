@@ -97,76 +97,76 @@ def main():
     print(f"{len(nodes)} nodes, {len(At)} edges")
     # input('.')
 
-    # ### per-node weight variable version
-    # ### finally finds infeasible at subsize == 2000! but slow.
-    # ### saved in ab_necessary_lp_gen_8_CBC.infeas.pkl
+    ### per-node weight variable version
+    ### finally finds infeasible at subsize == 2000! but slow.
+    ### saved in ab_necessary_lp_gen_8_CBC.infeas.pkl
     
-    # ## variables
-    # w = cp.Variable((len(nodes), N)) # weight vector per node
-    # β = cp.Variable(len(At)) # beta per spanning tree edge (nodes - 1)
-
-    # ## data constraints
-    # print("Building sample constraints...")
-    # sample_constraints = [
-    #     w[n:n+1] @ (Xk * yk) >= eps
-    #     for n, (p, kk, i, Xk, yk) in enumerate(nodes)
-    #     if p is not None] # no constraints on root
-
-    # ## span constraints
-    # print("Building span constraints...")
-    # span_constraints = [
-    #     w[n] == w[p] + β[e] * (x * y)
-    #     for e, (n,p,x,y) in enumerate(At)]
-
-    # ## objective to bound problem
-    # print("Building objective...")
-    # c = np.stack([
-    #     (Xk * yk).mean(axis=1)
-    #     for (p, kk, i, Xk, yk) in nodes
-    #     if p is not None])
-    # objective = cp.Minimize(cp.sum(cp.multiply(w[1:], c)))
-
-    # constraints = sample_constraints + span_constraints
-
-    ### root weight variable version
-
     ## variables
-    w = cp.Variable(N) # weight vector at root
+    w = cp.Variable((len(nodes), N)) # weight vector per node
     β = cp.Variable(len(At)) # beta per spanning tree edge (nodes - 1)
 
-    # path index lookup
-    path_index = {}
-    for e, (n, p, _, _) in enumerate(At): path_index[n,p] = e
-
     ## data constraints
-    print("Building constraints and objective...")
-    constraints = []
-    obj_w, obj_β = np.zeros(N), np.zeros(len(At))
-    for n, (p, kk, i, Xk, yk) in enumerate(nodes):
+    print("Building sample constraints...")
+    sample_constraints = [
+        w[n:n+1] @ (Xk * yk) >= eps
+        for n, (p, kk, i, Xk, yk) in enumerate(nodes)
+        if p is not None] # no constraints on root
 
-        # no region constraint on initial weights
-        if p is None: continue
+    ## span constraints
+    print("Building span constraints...")
+    span_constraints = [
+        w[n] == w[p] + β[e] * (x * y)
+        for e, (n,p,x,y) in enumerate(At)]
 
-        # get path edge index
-        e = []
-        a = n
-        while p is not None:
-            e.insert(0, path_index[a,p])
-            # move to parent
-            a = p
-            p = nodes[a][0]
+    ## objective to bound problem
+    print("Building objective...")
+    c = np.stack([
+        (Xk * yk).mean(axis=1)
+        for (p, kk, i, Xk, yk) in nodes
+        if p is not None])
+    objective = cp.Minimize(cp.sum(cp.multiply(w[1:], c)))
 
-        # add sample constraint
-        Xyk = Xk * yk
-        Xyk_T_Xyk = Xyk.T @ Xyk
-        constraints.append( w @ Xyk + β[e] @ Xyk_T_Xyk >= eps )
+    constraints = sample_constraints + span_constraints
 
-        # accumulate objective data for constraint slacks
-        obj_w += Xyk.sum(axis=1)
-        obj_β[e] += Xyk_T_Xyk.sum(axis=1)
+    # ### root weight variable version
 
-    ## objective to bound problem: minimize net slack
-    objective = cp.Minimize(w @ obj_w + β @ obj_β)
+    # ## variables
+    # w = cp.Variable(N) # weight vector at root
+    # β = cp.Variable(len(At)) # beta per spanning tree edge (nodes - 1)
+
+    # # path index lookup
+    # path_index = {}
+    # for e, (n, p, _, _) in enumerate(At): path_index[n,p] = e
+
+    # ## data constraints
+    # print("Building constraints and objective...")
+    # constraints = []
+    # obj_w, obj_β = np.zeros(N), np.zeros(len(At))
+    # for n, (p, kk, i, Xk, yk) in enumerate(nodes):
+
+    #     # no region constraint on initial weights
+    #     if p is None: continue
+
+    #     # get path edge index
+    #     e = []
+    #     a = n
+    #     while p is not None:
+    #         e.insert(0, path_index[a,p])
+    #         # move to parent
+    #         a = p
+    #         p = nodes[a][0]
+
+    #     # add sample constraint
+    #     Xyk = Xk * yk
+    #     Xyk_T_Xyk = Xyk.T @ Xyk
+    #     constraints.append( w @ Xyk + β[e] @ Xyk_T_Xyk >= eps )
+
+    #     # accumulate objective data for constraint slacks
+    #     obj_w += Xyk.sum(axis=1)
+    #     obj_β[e] += Xyk_T_Xyk.sum(axis=1)
+
+    # ## objective to bound problem: minimize net slack
+    # objective = cp.Minimize(w @ obj_w + β @ obj_β)
 
     # saved results here
     fname = f"ab_necessary_lp_gen_{N}_{solver}.pkl"
