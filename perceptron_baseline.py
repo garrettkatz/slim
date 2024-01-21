@@ -7,7 +7,7 @@ from enumerate_ltms import get_equivalence_class_size
 
 if __name__ == "__main__":
 
-    do_exp = True # whether to run the perceptron training or just load the results
+    do_exp = False # whether to run the perceptron training or just load the results
 
     # experiment up to dimension N_max
     if len(sys.argv) > 1:
@@ -109,8 +109,10 @@ if __name__ == "__main__":
     import matplotlib
     matplotlib.rcParams['font.family'] = 'serif'
     matplotlib.rcParams['text.usetex'] = True
+    matplotlib.rcParams['font.size'] = 12
+    # print(matplotlib.rcParams['font.size'])
 
-    pt.figure(figsize=(2.25,1.8))
+    pt.figure(figsize=(3,2))
 
     # stdev envelope background
     pt.fill_between(Ns, avg_iters-std_iters, avg_iters+std_iters, color=(.8,)*3)
@@ -123,12 +125,13 @@ if __name__ == "__main__":
     pt.plot(Ns, avg_iters, 'ko-')
 
     # format axes
-    pt.ylabel("Epochs to convergence")
+    pt.ylabel("Number of Passes")
     pt.xlabel("Input dimension $N$")
     pt.xticks(Ns, Ns)
     pt.yscale('log')
     pt.yticks(10.**np.arange(3), ["$10^{%d}$" % k for k in range(3)])
     pt.gca().yaxis.get_minor_locator().set_params(numticks=10)
+    pt.tight_layout()
 
     # save and show
     pt.savefig('perbase.pdf')
