@@ -5,7 +5,7 @@ import pickle as pk
 # If Ns is an integer N, returns Yc, W, X, Ac for that N
 def load_ltm_data(Ns):
 
-    singleton = (type(Ns) == int)
+    singleton = (type(Ns) in (int, np.int64))
     if singleton: Ns = [Ns]
 
     Yc, W, X, Ac = {}, {}, {}, {}
