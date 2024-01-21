@@ -1,3 +1,5 @@
+import itertools as it
+from time import perf_counter
 import pickle as pk
 import sys
 from collections import deque
@@ -6,51 +8,36 @@ import cvxpy as cp
 import load_ltm_data as ld
 
 # @profile
-def main():
-
-    # solver = 'GLPK'
-    solver = 'CBC'
-    # solver = 'GLOP'
-    # solver = 'SCIPY'
-
-    do_opt = True
-    verbose = True
-    eps = 1
-    subsize = 3000
-
-    # input dimension for optimization
-    if len(sys.argv) > 1:
-        N = int(sys.argv[1])
-    else:
-        N = 8
+def do_lp(eps, N, num_regions, shuffle, solver, verbose):
 
     # load canonical regions and adjacencies
-    Yc, _, X, Ac = ld.load_ltm_data(N)
-    A = ld.organize_by_source(Ac)
+    Y, _, X, _ = ld.load_ltm_data(N)
     with open(f"adjs_{N}_c.npz", "rb") as f: (Yn, _) = pk.load(f)
 
     # number of regions
-    # R = Yc.shape[0]
+    R = Y.shape[0]
 
     # set up boundary indices to remove redundant region constraints
-    B = np.zeros(Yc.shape, dtype=bool)
-    for i in Yn: B[i, :] = (Yc[i] != Yn[i]).any(axis=0)
-
-    # set up permutation of vertices
-    perm = np.arange(X.shape[1]) # identity permutation
-    # perm = np.random.permutation(X.shape[1]) # random
-    B = B[:, perm]
-    Y = Yc[:, perm]
+    B = np.zeros(Y.shape, dtype=bool)
+    for i in Yn: B[i, :] = (Y[i] != Yn[i]).any(axis=0)
 
     # get random subset of canonicals
-    subsize = min(subsize, Yc.shape[0])
-    print(f"sampling {subsize} of {Yc.shape[0]} regions")
-    subset = np.random.choice(Yc.shape[0], size=subsize, replace=False)
-    B = B[subset]
-    Y = Y[subset]
+    if num_regions < Y.shape[0]:
+        print(f"sampling {num_regions} of {Y.shape[0]} regions")
+        subset = np.random.choice(Y.shape[0], size=num_regions, replace=False)
+        B = B[subset]
+        Y = Y[subset]
+    else:
+        subset = None
 
-    print(f"{B.any(axis=0).sum()} of {Yc.shape[1]} unioned boundary vertices")
-    print(f"{B.sum(axis=1).mean()} per region on average")
+    # shuffle presentation order if requested
+    if shuffle:
+        perm = np.random.permutation(X.shape[1])
+        X = X[:, perm]
+        B = B[:, perm]
+        Y = Y[:, perm]
+
+    print(f"{B.sum(axis=1).mean()} boundaries per region on average")
     print(f"< {B.sum()} edges total")
     # input('.')
     # import matplotlib.pyplot as pt
@@ -168,32 +155,58 @@ def main():
     # ## objective to bound problem: minimize net slack
     # objective = cp.Minimize(w @ obj_w + β @ obj_β)
 
+    # input("Press Enter to do opt")
+    start_time = perf_counter()
+    problem = cp.Problem(objective, constraints)
+    problem.solve(solver=solver, verbose=True)
+    opt_time = perf_counter() - start_time
+
+    result = (
+        problem.status,
+        w.value,
+        β.value,
+        subset,
+        opt_time,
+    )
+    return result
+
+if __name__ == "__main__":
+
+    do_opt = True
+
+    # input dimension for optimization
+    if len(sys.argv) > 1:
+        N = int(sys.argv[1])
+    else:
+        N = 8
+
+    # solver = 'GLPK' # 106s
+    # solver = 'CBC' # 13s
+    # solver = 'GLOP' # 11s
+    # solver = 'SCIPY' # 14s
+    solver = 'ECOS' # 6s, ~15min
+
+    eps = 1
+    num_regions = 3000
+    shuffle = False
+    verbose = True
+
     # saved results here
-    fname = f"ab_necessary_lp_gen_{N}_{solver}.pkl"
+    fname = f"ab_necessary_lp_gen_{N}_{num_regions}_{solver}.pkl"
 
     if do_opt:
-
-        input("Press Enter to do opt")
-        problem = cp.Problem(objective, constraints)
-        problem.solve(solver=solver, verbose=True)
-        with open(fname, 'wb') as f: pk.dump((subset, problem.status, w.value, β.value), f)
+        result = do_lp(eps, N, num_regions, shuffle, solver, verbose)
+        with open(fname, 'wb') as f: pk.dump(result, f)
     
-    with open(fname, 'rb') as f: subset, status, w, β = pk.load(f)
+    with open(fname, 'rb') as f: result = pk.load(f)
+
+    status, w, β, subset, opt_time, = result
 
     if w is not None: print(w.round(3))
     if β is not None: print(β.round(3))
 
     print(f"region subset = {subset}")
-    print(status)
+    print(f"optimization time = {opt_time}")
+    print(f"solver status = {status}")
 
-    # for n, (p, xy) in enumerate(nodes):
-    #     if p is None: continue
-
-    #     print(n, p)
-    #     print(w[n])
-    #     print(xy)
-    #     print(w[n:n+1] @ xy)
-
-
-if __name__ == "__main__": main()
 
