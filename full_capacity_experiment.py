@@ -37,6 +37,7 @@ if do_show:
     pt.figure(figsize=(3,3))
 
     opt_times = {}
+    coefs = []
     markers = 'ox+^'
     for solver, marker in zip(solvers, markers):
 
@@ -48,6 +49,7 @@ if do_show:
             status, w, β, subset, opt_time, = result
 
             opt_times[solver].append(opt_time)
+            if solver == "ECOS": coefs.append(β)
 
             print(f"N={N}, solver={solver}: {status} in {opt_time/60}min")
 
@@ -60,5 +62,16 @@ if do_show:
     pt.tight_layout()
     pt.savefig('fullcap.pdf')
     pt.show()
+
+    pt.figure(figsize=(3,3))
+    for N, coef in zip(Ns, coefs):
+        if coefs is None: continue
+        pt.plot([N]*len(coef), np.fabs(coef), 'k.')
+    pt.xlabel("N")
+    pt.ylabel("$|\gamma|$", rotation=0)
+    pt.tight_layout()
+    pt.savefig('gammas.pdf')
+    pt.show()
+
 
 
