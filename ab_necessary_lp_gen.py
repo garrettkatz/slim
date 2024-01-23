@@ -166,6 +166,7 @@ def do_lp(eps, N, num_regions, shuffle, solver, verbose):
         w.value,
         β.value,
         subset,
+        len(nodes),
         opt_time,
     )
     return result
@@ -200,7 +201,7 @@ if __name__ == "__main__":
     
     with open(fname, 'rb') as f: result = pk.load(f)
 
-    status, w, β, subset, opt_time, = result
+    status, w, β, subset, num_nodes, opt_time, = result
 
     if w is not None: print(w.round(3))
     if β is not None: print(β.round(3))

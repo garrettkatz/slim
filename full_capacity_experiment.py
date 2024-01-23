@@ -6,7 +6,7 @@ import matplotlib
 import matplotlib.pyplot as pt
 from ab_necessary_lp_gen import do_lp
 
-do_exp = True
+do_exp = False
 do_show = True
 
 N_max = int(sys.argv[1])
@@ -46,7 +46,7 @@ if do_show:
 
             fname = f"full_cap_{N}_{solver}.pkl"
             with open(fname, 'rb') as f: result = pk.load(f)
-            status, w, β, subset, opt_time, = result
+            status, w, β, subset, num_nodes, opt_time, = result
 
             opt_times[solver].append(opt_time)
             if solver == "ECOS": coefs.append(β)
@@ -58,6 +58,7 @@ if do_show:
     pt.xlabel("N")
     pt.ylabel("Run time (s)")
     pt.yscale('log')
+    pt.xticks(Ns, list(map(str, Ns)))
     pt.legend()
     pt.tight_layout()
     pt.savefig('fullcap.pdf')
@@ -65,10 +66,11 @@ if do_show:
 
     pt.figure(figsize=(3,3))
     for N, coef in zip(Ns, coefs):
-        if coefs is None: continue
+        if coef is None: continue
         pt.plot([N]*len(coef), np.fabs(coef), 'k.')
     pt.xlabel("N")
-    pt.ylabel("$|\gamma|$", rotation=0)
+    pt.xticks(Ns, list(map(str, Ns)))
+    pt.ylabel("$|\\gamma|$", rotation=0)
     pt.tight_layout()
     pt.savefig('gammas.pdf')
     pt.show()
