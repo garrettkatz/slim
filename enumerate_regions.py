@@ -58,13 +58,13 @@ if __name__ == "__main__":
             infeasible |= ((Xd[:,k:k+1] <= Xd[:,:k]).all(axis=0) & (Y[:,-1:] > Y[:,:-1])).any(axis=1)
             Y = Y[~infeasible, :]
 
+            # top-heavy filter: cumsum always less than zero
+            infeasible = (Xd[:,k] <= 0).all() & (Y[:,k] > 0)
+            Y = Y[~infeasible, :]
+
             # trailing negation filter
             if k > 0:
                 n = (X[:,k] > 0).argmax()
-
-                # kn = (X[:n+1,:k+1] < 0).all(axis=0) & (X[n:,:k+1] <= -X[n:,k:k+1]).all(axis=0)
-                # print(kn.astype(int))
-                # infeasible = (Y[:,kn] > 0).any(axis=1) & (Y[:, k] > 0)
 
                 kn = (X[n:,:k] == -X[n:,k:k+1]).all(axis=0).argmax()
                 infeasible = (Y[:,kn] > 0) & (Y[:,k] > 0)
@@ -95,17 +95,17 @@ if __name__ == "__main__":
         #     if feasible: W.append(w)
         # W = np.stack(W)
     
-        # don't use all cores when multiprocessing
-        num_procs = cpu_count()-2
-        # pool_args = [(X[:,b], y[b], ε) for (y,b) in zip(Y, B)]
-        pool_args = [(X, y, ε) for y in Y]
-        with Pool(num_procs) as pool:
-            results = pool.map(check_feasibility_pooled, pool_args)
-        feasible, W = map(np.array, zip(*results))
-        W = W[feasible]
-        Y = Y[feasible]
+        # # don't use all cores when multiprocessing
+        # num_procs = cpu_count()-2
+        # # pool_args = [(X[:,b], y[b], ε) for (y,b) in zip(Y, B)]
+        # pool_args = [(X, y, ε) for y in Y]
+        # with Pool(num_procs) as pool:
+        #     results = pool.map(check_feasibility_pooled, pool_args)
+        # feasible, W = map(np.array, zip(*results))
+        # W = W[feasible]
+        # Y = Y[feasible]
 
-        np.savez(f"regions_{N}.npz", X=X, Y=Y, W=W)
+        # np.savez(f"regions_{N}.npz", X=X, Y=Y, W=W)
 
     with np.load(f"regions_{N}.npz") as regions:
         X, Y, W = (regions[key] for key in ("XYW"))
