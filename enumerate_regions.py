@@ -5,12 +5,12 @@ import cvxpy as cp
 from multiprocessing import Pool, cpu_count
 
 def check_feasibility(X, y, ε, verbose=False):
-    N = X.shape[0]
+    N = X.shape[1]
     w = cp.Variable(N)
-    wXy = w @ (X * y)
-    objective = cp.Minimize(cp.sum(wXy))
+    wxy = w @ (X.T * y)
+    objective = cp.Minimize(cp.sum(wxy))
     constraints = [
-        wXy >= ε,       # linearly separable
+        wxy >= ε,       # linearly separable
         w[-1] >= 0,     # non-negative
         w[:-1] >= w[1:] # descending order
     ]
@@ -32,97 +32,68 @@ if __name__ == "__main__":
     if do_enum:
 
         # generate half-cube vertices
-        X = np.array(tuple(it.product((-1, +1), repeat=N-1))).T
-        X = np.vstack((-np.ones(2**(N-1), dtype=int), X))
-        # X = np.vstack((X, -np.ones(2**(N-1), dtype=int)))
+        X = np.array(tuple(it.product((-1, +1), repeat=N)))
+        X = X[:2**(N-1)]
         print(X)
     
         # for 2-monotonicity
-        Xd = np.cumsum(X, axis=0)
+        Xd = np.cumsum(X, axis=1)
     
-        # initialize leading dichotomies
+        # initialize leading dichotomies and redundancy mask
         Y = np.array([[-1]])
         B = np.array([[True]])
     
-        for k in range(1, X.shape[1]):
-            print(f"vertex {k} of {X.shape[1]}: {Y.shape[0]} candidate dichotomies")
-            print(X[:,k])
+        for k in range(1, len(X)):
+            print(f"vertex {k} of {len(X)}: {Y.shape[0]} candidate dichotomies")
+            print(X[k])
+
+            # all-negative filter
+            if (Xd[k] <= 0).all():
+                Y = np.block([Y, np.full((Y.shape[0], 1), -1)])
+                B = np.block([B, np.full((Y.shape[0], 1), False)])
+                continue
+
+            # 2-monotonicity filters
+            negative = ((Xd[k] <= Xd[:k]).all(axis=1) & (Y == -1)).any(axis=1)
+            positive = ((Xd[k] >= Xd[:k]).all(axis=1) & (Y == +1)).any(axis=1)
+
+            # negated tail filter
+            n = (X[k] == +1).argmax()
+            kn = (X[:k, n:] == -X[k, n:]).all(axis=1).argmax()
+            negative |= (Y[:,kn] == +1)
+
+            # Expand Y and B
+            eitheror = ~ (negative | positive)
     
-            # duplicate Y
             Y = np.block([
-                [Y, -np.ones((Y.shape[0], 1))],
-                [Y, +np.ones((Y.shape[0], 1))]])
-    
-            # 2-monotonicity filter
-            infeasible = ((Xd[:,k:k+1] >= Xd[:,:k]).all(axis=0) & (Y[:,-1:] < Y[:,:-1])).any(axis=1)
-            infeasible |= ((Xd[:,k:k+1] <= Xd[:,:k]).all(axis=0) & (Y[:,-1:] > Y[:,:-1])).any(axis=1)
-            Y = Y[~infeasible, :]
+                [Y[negative], np.full((negative.sum(),1), -1)],
+                [Y[eitheror], np.full((eitheror.sum(),1), -1)],
+                [Y[eitheror], np.full((eitheror.sum(),1), +1)],
+                [Y[positive], np.full((positive.sum(),1), +1)],
+            ])
+            B = np.block([
+                [B[negative], np.full((negative.sum(), 1), False)],
+                [B[eitheror], np.full((eitheror.sum(), 1), True)],
+                [B[eitheror], np.full((eitheror.sum(), 1), True)],
+                [B[positive], np.full((positive.sum(), 1), False)],
+            ])
+   
+        # don't use all cores when multiprocessing
+        num_procs = cpu_count()-2
+        pool_args = [(X[b], y[b], ε) for (y,b) in zip(Y, B)]
+        with Pool(num_procs) as pool:
+            results = pool.map(check_feasibility_pooled, pool_args)
+        feasible, W = map(np.array, zip(*results))
+        W = W[feasible]
+        Y = Y[feasible]
 
-            # top-heavy filter: cumsum always less than zero
-            infeasible = (Xd[:,k] <= 0).all() & (Y[:,k] > 0)
-            Y = Y[~infeasible, :]
-
-            # trailing negation filter
-            if k > 0:
-                n = (X[:,k] > 0).argmax()
-
-                kn = (X[n:,:k] == -X[n:,k:k+1]).all(axis=0).argmax()
-                infeasible = (Y[:,kn] > 0) & (Y[:,k] > 0)
-
-                Y = Y[~infeasible, :]
-    
-            # must_be_negative = ((Xd[:,k:k+1] <= Xd[:,:k]).all(axis=0) & (Y < 0)).any(axis=1)
-            # must_be_positive = ((Xd[:,k:k+1] >= Xd[:,:k]).all(axis=0) & (Y > 0)).any(axis=1)
-            # can_be_either_or = ~ (must_be_negative | must_be_positive)
-    
-            # Y = np.block([
-            #     [Y[must_be_negative], np.full((must_be_negative.sum(),1), -1)],
-            #     [Y[can_be_either_or], np.full((can_be_either_or.sum(),1), -1)],
-            #     [Y[can_be_either_or], np.full((can_be_either_or.sum(),1), +1)],
-            #     [Y[must_be_positive], np.full((must_be_positive.sum(),1), +1)],
-            # ])
-            # B = np.block([
-            #     [B[must_be_negative], np.full((must_be_negative.sum(), 1), False)],
-            #     [B[can_be_either_or], np.full((can_be_either_or.sum(), 1), True)],
-            #     [B[can_be_either_or], np.full((can_be_either_or.sum(), 1), True)],
-            #     [B[must_be_positive], np.full((must_be_positive.sum(), 1), False)],
-            # ])
-    
-        # W = []
-        # for i,(y,b) in enumerate(zip(Y, B)):
-        #     print(f"checking candidate {i} of {Y.shape[0]}")
-        #     feasible, w = check_feasibility(X[:,b], y[b], ε)
-        #     if feasible: W.append(w)
-        # W = np.stack(W)
-    
-        # # don't use all cores when multiprocessing
-        # num_procs = cpu_count()-2
-        # # pool_args = [(X[:,b], y[b], ε) for (y,b) in zip(Y, B)]
-        # pool_args = [(X, y, ε) for y in Y]
-        # with Pool(num_procs) as pool:
-        #     results = pool.map(check_feasibility_pooled, pool_args)
-        # feasible, W = map(np.array, zip(*results))
-        # W = W[feasible]
-        # Y = Y[feasible]
-
-        # np.savez(f"regions_{N}.npz", X=X, Y=Y, W=W)
+        np.savez(f"regions_{N}.npz", X=X, Y=Y, W=W)
 
     with np.load(f"regions_{N}.npz") as regions:
         X, Y, W = (regions[key] for key in ("XYW"))
 
-    if not (np.sign(W @ X) == Y).all():
-        bad = (np.sign(W @ X) != Y).any(axis=1).argmax()
-        print(bad)
-        print(W[bad])
-        print(Y[bad])
-        print(np.sign(W[bad] @ X))
-
-        feas, w = check_feasibility(X, Y[bad], ε, verbose=True)
-        print(feas)
-        print(w)
-
-    assert (np.sign(W @ X) == Y).all()
+    assert (np.sign(W @ X.T) == Y).all()
     assert len(Y) == len(np.unique(Y, axis=0))
-    print(f"{W.shape[0]} feasible regions total")
+    print(f"{len(Y)} feasible regions total")
 
 
