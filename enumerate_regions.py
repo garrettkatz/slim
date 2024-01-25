@@ -4,7 +4,7 @@ import numpy as np
 import cvxpy as cp
 from multiprocessing import Pool, cpu_count
 
-def check_feasibility(X, y, ε, verbose=False):
+def check_feasibility(X, y, ε, tag=None, verbose=False):
     N = X.shape[1]
     w = cp.Variable(N)
     wxy = w @ (X.T * y)
@@ -18,6 +18,8 @@ def check_feasibility(X, y, ε, verbose=False):
     problem.solve(solver='CBC', verbose=verbose) # ECOS has a single false positive (reports feasible) at N=8
     feasible = (problem.status == 'optimal')
     w = w.value if feasible else np.empty(N)
+    if tag is not None:
+        print(f"{tag} complete: feasible={feasible}")
     return feasible, w
 
 def check_feasibility_pooled(args):
@@ -57,10 +59,11 @@ if __name__ == "__main__":
             negative = ((Xd[k] <= Xd[:k]).all(axis=1) & (Y == -1)).any(axis=1)
             positive = ((Xd[k] >= Xd[:k]).all(axis=1) & (Y == +1)).any(axis=1)
 
-            # negated tail filter
-            n = (X[k] == +1).argmax()
-            kn = (X[:k, n:] == -X[k, n:]).all(axis=1).argmax()
-            negative |= (Y[:,kn] == +1)
+            # # negated tail filter
+            for n in np.flatnonzero(X[k] == +1):
+                kn = (X[:k, n:] == -X[k, n:]).all(axis=1).argmax()
+                negative |= (Y[:,kn] == +1)
+
 
             # Expand Y and B
             eitheror = ~ (negative | positive)
@@ -79,21 +82,23 @@ if __name__ == "__main__":
             ])
    
         # don't use all cores when multiprocessing
-        num_procs = cpu_count()-2
-        pool_args = [(X[b], y[b], ε) for (y,b) in zip(Y, B)]
+        num_procs = cpu_count()-3
+        pool_args = [(X[b], y[b], ε, i) for i,(y,b) in enumerate(zip(Y, B))]
         with Pool(num_procs) as pool:
             results = pool.map(check_feasibility_pooled, pool_args)
         feasible, W = map(np.array, zip(*results))
-        W = W[feasible]
         Y = Y[feasible]
+        B = B[feasible]
+        W = W[feasible]
 
-        np.savez(f"regions_{N}.npz", X=X, Y=Y, W=W)
+        # np.savez(f"regions_{N}.npz", X=X, Y=Y, B=B, W=W)
 
     with np.load(f"regions_{N}.npz") as regions:
-        X, Y, W = (regions[key] for key in ("XYW"))
+        X, Y, B, W = (regions[key] for key in ("XYBW"))
 
     assert (np.sign(W @ X.T) == Y).all()
     assert len(Y) == len(np.unique(Y, axis=0))
     print(f"{len(Y)} feasible regions total")
+    print(f"{B.sum(axis=1).mean()} constraints per region")
 
 
