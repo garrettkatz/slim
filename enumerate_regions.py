@@ -59,31 +59,30 @@ if __name__ == "__main__":
             negative = ((Xd[k] <= Xd[:k]).all(axis=1) & (Y == -1)).any(axis=1)
             positive = ((Xd[k] >= Xd[:k]).all(axis=1) & (Y == +1)).any(axis=1)
 
-            # # negated tail filter
-            for n in np.flatnonzero(X[k] == +1):
-                kn = (X[:k, n:] == -X[k, n:]).all(axis=1).argmax()
-                negative |= (Y[:,kn] == +1)
-
+            # other half of cube
+            negative |= ((Xd[k] <= -Xd[:k]).all(axis=1) & (-Y == -1)).any(axis=1)
 
             # Expand Y and B
-            eitheror = ~ (negative | positive)
+            unknowns = ~ (negative | positive)
     
             Y = np.block([
                 [Y[negative], np.full((negative.sum(),1), -1)],
-                [Y[eitheror], np.full((eitheror.sum(),1), -1)],
-                [Y[eitheror], np.full((eitheror.sum(),1), +1)],
+                [Y[unknowns], np.full((unknowns.sum(),1), -1)],
+                [Y[unknowns], np.full((unknowns.sum(),1), +1)],
                 [Y[positive], np.full((positive.sum(),1), +1)],
             ])
             B = np.block([
                 [B[negative], np.full((negative.sum(), 1), False)],
-                [B[eitheror], np.full((eitheror.sum(), 1), True)],
-                [B[eitheror], np.full((eitheror.sum(), 1), True)],
+                [B[unknowns], np.full((unknowns.sum(), 1), True)],
+                [B[unknowns], np.full((unknowns.sum(), 1), True)],
                 [B[positive], np.full((positive.sum(), 1), False)],
             ])
+
+        print(f"all {len(X)} vertices: {Y.shape[0]} candidate dichotomies")
    
         # don't use all cores when multiprocessing
         num_procs = cpu_count()-3
-        pool_args = [(X[b], y[b], ε, i) for i,(y,b) in enumerate(zip(Y, B))]
+        pool_args = [(X[b], y[b], ε, f"{i} of {len(Y)}") for i,(y,b) in enumerate(zip(Y, B))]
         with Pool(num_procs) as pool:
             results = pool.map(check_feasibility_pooled, pool_args)
         feasible, W = map(np.array, zip(*results))
@@ -91,7 +90,7 @@ if __name__ == "__main__":
         B = B[feasible]
         W = W[feasible]
 
-        # np.savez(f"regions_{N}.npz", X=X, Y=Y, B=B, W=W)
+        np.savez(f"regions_{N}.npz", X=X, Y=Y, B=B, W=W)
 
     with np.load(f"regions_{N}.npz") as regions:
         X, Y, B, W = (regions[key] for key in ("XYBW"))
