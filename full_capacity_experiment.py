@@ -15,7 +15,8 @@ eps = 1
 Ns = np.arange(3, N_max+1)
 num_regions = np.inf # no sub-sampling
 shuffle = False
-solvers = ('GLPK', 'SCIPY', 'CBC', 'ECOS')
+# solvers = ('GLPK', 'SCIPY', 'CBC', 'ECOS')
+solvers = ("GUROBI", "MOSEK")
 verbose = True
 
 if do_exp:
@@ -49,7 +50,7 @@ if do_show:
             status, w, β, subset, num_nodes, opt_time, = result
 
             opt_times[solver].append(opt_time)
-            if solver == "ECOS": coefs.append(β)
+            if solver == "GUROBI": coefs.append(β)
 
             print(f"N={N}, solver={solver}: {status} in {opt_time/60}min")
 
