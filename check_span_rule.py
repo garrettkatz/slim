@@ -1,55 +1,62 @@
 def check_span_rule(X, Y, B, W, solver, verbose=False):
 
-    assert len(Y) == len(np.unique(Y, axis=0))
-    assert (np.sign(Y) == Y).all()
+    N = X.shape[1]
+    assert (np.fabs(X) == 1).all()
     assert (np.fabs(Y) == 1).all()
+    assert len(X) == len(np.unique(X, axis=1))
+    assert len(Y) == len(np.unique(Y, axis=0))
 
-    print("Building tree...")
-    node_data = []
-    V, E = {(): 0}, []
+    print("Building the tree...")
+
+    V, E = {((), ()): (0, 0)}, []
     for i in range(len(Y)):
-        D = ()
+        Dk, Dy = (), ()
         for k in np.flatnonzero(B[i]):
-            p = V[D]
-            D += ( (k, Y[i,k]), )
-            if D not in V:
-                V[D] = len(V)
-                node_data.append( (p, D, i) )
-            n = V[D]
-            E.append( (n, p, X[k]) )
+            p = V[Dk, Dy]
+            Dk += (k,)
+            Dy += (Y[i,k],)
+            if Dk, Dy not in V:
+                n = len(V)
+                V[Dk, Dy] = (n, i)
+                E.append( (n, p, X[k], Y[i,k]) )
 
-    for p, D, i in node_data:
-        kn, yn = zip(*D)
-        assert (np.sign(W[i] @ X[kn]) == yn).all()
-        assert (Xp == Xn[:-1]).all()
-        assert (yp == yn[:-1]).all()
+    V = [(X[Dk], np.array(Dy), i)
+        for (Dk, Dy), (_, i) in V.items()]
 
-    print("Building linear program...")
+    print("Checking the tree...")
 
-    ## variables
-    u = cp.Variable((len(V), N)) # weight vector per node
-    𝛾 = cp.Variable(len(E)) # gamma per spanning tree edge
+    for (Xn, yn, i) in V:
+        assert (np.sign(W[i] @ Xn.T) == yn).all()
+    for (n, p, x, y) in E:
+        Xn, yn, _ = V[n]
+        Xp, yp, _ = V[p]
+        assert (Xn == np.append(Xp, x.reshape(1,N)).all()
+        assert (yn == np.append(yp, y)).all()
 
-    ## data constraints
-    sample_constraints = [
-        u[n] @ (Xn * yn) >= 1
-        for n, (p, kk, i, Xk, yk) in enumerate(nodes)
-        if p is not None] # no constraints on root
+    print("Running the linear program...")
 
-    ## span constraints
+    u = cp.Variable((len(V), N))
+    ɣ = cp.Variable(len(E))
+
     span_constraints = [
-        u[n] == u[p] + 𝛾[e] * x
-        for e, (n, p, x) in enumerate(E)]
+        u[n] == u[p] + ɣ[e] * x
+        for e, (n, p, x, y) in enumerate(E)]
 
-    ## objective to bound problem
-    print("Building objective...")
+    data_constraints = [
+        u[n] @ (Xn.T * yn) >= 1
+        for n, (Xn, yn, _) in enumerate(nodes) if n > 0]
+
     c = np.stack([
-        (Xn * yn).mean(axis=1)
-        for (p, kk, i, Xk, yk) in nodes
-        if p is not None])
-    objective = cp.Minimize(cp.sum(cp.multiply(w[1:], c)))
+        (Xn.T * yn).mean(axis=1)
+        for n, (Xn, yn, _) in enumerate(nodes) if n > 0])
 
+    objective = cp.Minimize(cp.sum(cp.multiply(u[1:], c)))
     constraints = sample_constraints + span_constraints
+
+    problem = cp.Problem(objective, constraints)
+    problem.solve(solver=solver, verbose=verbose)
+
+    feasible = (problem.status == 'optimal')
 
 
 
