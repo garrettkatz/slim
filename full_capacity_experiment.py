@@ -10,15 +10,14 @@ from check_span_rule import *
 do_exp = True
 do_show = True
 
-N_max = int(sys.argv[1])
+solvers = sys.argv[1].split(",")
+N_max = int(sys.argv[2])
 Ns = np.arange(3, N_max+1)
-
-solvers = ("ECOS",) # "SCIPY", "GUROBI", "MOSEK")
 verbose = True
 
 if do_exp:
-    
-    for N, solver in it.product(Ns, solvers): 
+
+    for N, solver in it.product(Ns, solvers):
 
         # load region data
         with np.load(f"regions_{N}_{solver}.npz") as regions:
@@ -31,12 +30,12 @@ if do_exp:
         run_time = perf_counter() - start
 
         # check feasibility
-        feasible, u, ɣ, D, E = result
-        if feasible:
+        status, u, g, D, E = result
+        if status == "optimal":
             for e, (n, p, x, _) in enumerate(E):
                 Xn, yn, _ = D[n]
                 assert (np.sign(u[n] @ Xn.T) == yn).all()
-                assert np.allclose(u[n], u[p] + ɣ[e] * x)
+                assert np.allclose(u[n], u[p] + g[e] * x)
 
         fname = f"full_cap_{N}_{solver}.pkl"
         with open(fname, 'wb') as f: pk.dump((result, run_time), f)
@@ -59,10 +58,10 @@ if do_show:
 
             fname = f"full_cap_{N}_{solver}.pkl"
             with open(fname, 'rb') as f: result, run_time = pk.load(f)
-            status, u, ɣ, D, E = result
+            status, u, g, D, E = result
 
             run_times[solver].append(run_time)
-            if solver == solvers[0]: coefs.append(ɣ)
+            if solver == solvers[0]: coefs.append(g)
 
             print(f"N={N}, solver={solver}: {status} in {run_time/60}min")
 

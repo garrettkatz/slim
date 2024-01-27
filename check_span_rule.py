@@ -41,10 +41,10 @@ def check_span_rule(X, Y, B, W, solver, verbose=False):
     print("Running the linear program...")
 
     u = cp.Variable((len(D), N))
-    ɣ = cp.Variable(len(E))
+    g = cp.Variable(len(E))
 
     span_constraints = [
-        u[n] == (u[p] + ɣ[e] * x)
+        u[n] == (u[p] + g[e] * x)
         for e, (n, p, x, _) in enumerate(E)]
 
     data_constraints = [
@@ -64,7 +64,7 @@ def check_span_rule(X, Y, B, W, solver, verbose=False):
     return (
         problem.status,
         u.value,
-        ɣ.value,
+        g.value,
         D, E
     )
 
