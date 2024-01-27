@@ -4,40 +4,41 @@ import pickle as pk
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as pt
-from check_span_rule import *
+from ab_necessary_lp_gen import do_lp
+from load_ltm_data import *
 
 do_exp = True
 do_show = True
 
-region_sampling = 5
+region_sampling = 10
 num_reps = 30
 
-solver = sys.argv[1]
-N = int(sys.argv[2])
+eps = 1
+N = int(sys.argv[1])
+shuffle = False
+solver = 'ECOS'
+verbose = True
 
-with np.load(f"regions_{N}_{solver}.npz") as regions:
-    X, Y, B, W = (regions[key] for key in ("XYBW"))
-
-num_region_samples = np.linspace(Y.shape[0]//2, Y.shape[0], region_sampling+1)[:-1].astype(int)
+Y, _, _, _ = load_ltm_data(N)
+R = Y.shape[0]
+# num_region_samples = R - np.geomspace(1, Y.shape[0]-1, region_sampling).astype(int)
+num_region_samples = np.linspace(Y.shape[0]//2, Y.shape[0]-1, region_sampling).astype(int)
 print(num_region_samples)
 input('.')
 
 if do_exp:
-
+    
     for (nr, rep) in it.product(range(region_sampling), range(num_reps)):
         num_regions = num_region_samples[nr]
 
-        # sub-sample the regions
-        sample = np.random.choice(len(Y), num_regions, replace=False)        
-
         print(f"Running N={N}, {num_regions} regions ({nr} of {region_sampling}), rep={rep} of {num_reps}...")
-        result = check_span_rule(X, Y[sample], B[sample], W[sample], solver, verbose=True)
-        status, u, ɣ, num_nodes = result
+        result = do_lp(eps, N, num_regions, shuffle, solver, verbose)
 
-        print(f"N={N}, {num_regions} regions ({num_nodes} nodes), rep {rep}: {status}")
+        status, w, β, subset, num_nodes, opt_time, = result
+        print(f"N={N}, {num_regions} regions ({num_nodes} nodes), rep {rep}: {status} in {opt_time/60}min")
 
         fname = f"high_cap_{N}_{num_regions}_{rep}.pkl"
-        with open(fname, 'wb') as f: pk.dump((result, sample), f)
+        with open(fname, 'wb') as f: pk.dump(result, f)
 
 if do_show:
 
@@ -54,17 +55,17 @@ if do_show:
         for rep in range(num_reps):
 
             fname = f"high_cap_{N}_{num_regions}_{rep}.pkl"
-            with open(fname, 'rb') as f: result, sample = pk.load(f)
-            status, u, ɣ, num_nodes = result
+            with open(fname, 'rb') as f: result = pk.load(f)
+            status, w, β, subset, num_nodes, opt_time, = result
 
             if status == 'optimal': num_feas += 1
 
-            print(f"N={N}, {num_regions} regions ({num_nodes} nodes), rep {rep}: {status}")
+            print(f"N={N}, {num_regions} regions ({num_nodes} nodes), rep {rep}: {status} in {opt_time/60}min")
 
         feasibility_rate.append( num_feas / num_reps )
 
-    pt.plot(100 * num_region_samples // R, feasibility_rate, 'ko-')
-    pt.xlabel("Dichotomy sample size (%)")
+    pt.plot(num_region_samples / R, feasibility_rate, 'ko-')
+    pt.xlabel("Fraction of Dichotomies")
     pt.ylabel("Feasibility Rate")
     pt.tight_layout()
     pt.savefig('highcap.pdf')

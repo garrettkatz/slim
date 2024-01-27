@@ -2,7 +2,7 @@ import sys
 import itertools as it
 import numpy as np
 from multiprocessing import Pool, cpu_count
-from check_feasibility import check_feasibility_pooled
+from check_separability import check_separability_pooled
 
 if __name__ == "__main__":
 
@@ -66,12 +66,12 @@ if __name__ == "__main__":
             for i,(y,b) in enumerate(zip(Y, B))]
 
         # # singleprocessing version
-        # results = list(it.starmap(check_feasibility, pool_args))
+        # results = list(map(check_separability_pooled, pool_args))
 
         # multiprocessing version (don't use all cores)
         num_procs = max(1, cpu_count()-2)
         with Pool(num_procs) as pool:
-            results = pool.map(check_feasibility_pooled, pool_args)
+            results = pool.map(check_separability_pooled, pool_args)
 
         feasible, W = map(np.array, zip(*results))
         Y = Y[feasible]
@@ -85,7 +85,8 @@ if __name__ == "__main__":
 
     assert (np.sign(W @ X.T) == Y).all()
     assert len(Y) == len(np.unique(Y, axis=0))
+    nB = B.sum(axis=1)
     print(f"{len(Y)} feasible regions total")
-    print(f"{B.sum(axis=1).mean()} constraints per region")
+    print(f"{nB.min()} <= ~{nB.mean()} <= {nB.max()} constraints per region")
 
 

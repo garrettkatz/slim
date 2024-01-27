@@ -1,3 +1,6 @@
+import numpy as np
+import cvxpy as cp
+
 def check_span_rule(X, Y, B, W, solver, verbose=False):
 
     N = X.shape[1]
@@ -8,56 +11,61 @@ def check_span_rule(X, Y, B, W, solver, verbose=False):
 
     print("Building the tree...")
 
-    V, E = {((), ()): (0, 0)}, []
+    V, E = {(): (0, 0)}, []
     for i in range(len(Y)):
-        Dk, Dy = (), ()
+        D = ()
         for k in np.flatnonzero(B[i]):
-            p = V[Dk, Dy]
-            Dk += (k,)
-            Dy += (Y[i,k],)
-            if Dk, Dy not in V:
+            p, _ = V[D]
+            D += ((k, Y[i,k]),)
+            if D not in V:
                 n = len(V)
-                V[Dk, Dy] = (n, i)
+                V[D] = (n, i)
                 E.append( (n, p, X[k], Y[i,k]) )
 
-    V = [(X[Dk], np.array(Dy), i)
-        for (Dk, Dy), (_, i) in V.items()]
+    D = [(X[[]], np.empty(0), 0)]
+    for (Dn, (n, i)) in V.items():
+        if n == 0: continue
+        ks, y = map(np.int64, zip(*Dn))
+        D.append((X[ks], y, i))
 
     print("Checking the tree...")
 
-    for (Xn, yn, i) in V:
+    for (Xn, yn, i) in D:
         assert (np.sign(W[i] @ Xn.T) == yn).all()
     for (n, p, x, y) in E:
-        Xn, yn, _ = V[n]
-        Xp, yp, _ = V[p]
-        assert (Xn == np.append(Xp, x.reshape(1,N)).all()
-        assert (yn == np.append(yp, y)).all()
+        Xn, yn, _ = D[n]
+        Xp, yp, _ = D[p]
+        assert (Xp == Xn[:-1]).all()
+        assert (yp == yn[:-1]).all()
 
     print("Running the linear program...")
 
-    u = cp.Variable((len(V), N))
+    u = cp.Variable((len(D), N))
     ɣ = cp.Variable(len(E))
 
     span_constraints = [
-        u[n] == u[p] + ɣ[e] * x
-        for e, (n, p, x, y) in enumerate(E)]
+        u[n] == (u[p] + ɣ[e] * x)
+        for e, (n, p, x, _) in enumerate(E)]
 
     data_constraints = [
         u[n] @ (Xn.T * yn) >= 1
-        for n, (Xn, yn, _) in enumerate(nodes) if n > 0]
+        for n, (Xn, yn, _) in enumerate(D) if n > 0]
 
     c = np.stack([
-        (Xn.T * yn).mean(axis=1)
-        for n, (Xn, yn, _) in enumerate(nodes) if n > 0])
+        (Xn.T * yn).sum(axis=1)
+        for n, (Xn, yn, _) in enumerate(D) if n > 0])
 
+    constraints = span_constraints + data_constraints
     objective = cp.Minimize(cp.sum(cp.multiply(u[1:], c)))
-    constraints = sample_constraints + span_constraints
 
     problem = cp.Problem(objective, constraints)
     problem.solve(solver=solver, verbose=verbose)
 
-    feasible = (problem.status == 'optimal')
-
-
+    return (
+        problem.status,
+        u.value,
+        ɣ.value,
+        D, E
+    )
 
 
