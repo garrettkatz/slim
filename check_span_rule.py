@@ -56,7 +56,7 @@ def check_span_rule(X, Y, B, W, solver, verbose=False):
         for n, (Xn, yn, _) in enumerate(D) if n > 0])
 
     constraints = span_constraints + data_constraints
-    objective = cp.Minimize(cp.sum(cp.multiply(u[1:], c)))
+    objective = cp.Minimize(cp.sum(cp.multiply(u[1:],c)))
 
     problem = cp.Problem(objective, constraints)
     problem.solve(solver=solver, verbose=verbose)

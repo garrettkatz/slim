@@ -7,7 +7,7 @@ import matplotlib
 import matplotlib.pyplot as pt
 from check_span_rule import *
 
-do_exp = True
+do_exp = False
 do_show = True
 
 solvers = sys.argv[1].split(",")
@@ -82,7 +82,7 @@ if do_show:
         pt.plot([N]*len(coef), np.fabs(coef), 'k.')
     pt.xlabel("N")
     pt.xticks(Ns, list(map(str, Ns)))
-    pt.xlim(Ns[0]-1, Ns[-1]+1)
+    pt.xlim(Ns[0]-.25, Ns[-1]+.25)
     pt.ylabel("$|\\gamma|$", rotation=0)
     pt.tight_layout()
     pt.savefig('gammas.pdf')
