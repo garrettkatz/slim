@@ -54,7 +54,7 @@ if do_exp:
 
         print("summary:")
         for old_nr, feases in feasibilities.items():
-            print(f"{old_nr}: {num_regions} regions, {len(feases)} reps, {np.mean(feases)} feasible")
+            print(f"{old_nr}: {num_region_samples[old_nr]} regions, {len(feases)} reps, {np.mean(feases)} feasible")
 
 if do_show:
 

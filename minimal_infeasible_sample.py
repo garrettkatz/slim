@@ -79,6 +79,9 @@ if do_show:
 
     with open(fname, 'rb') as f: result, sample = pk.load(f)
 
+    print("sample:", sample)
+    print("sorter[sample]:", sorter[sample])
+
     Bu = B[sample].any(axis=0)
 
     pt.subplot(3,1,1)
@@ -98,6 +101,13 @@ if do_show:
     pt.xlabel("k")
     pt.title("Dichotomies")
     # pt.axis("off")
+
+    print("B:")
+    print(B[sample][:,Bu])
+    print("X.T:")
+    print(X.T[:, Bu])
+    print("Y:")
+    print(Y[sample][:, Bu])
 
     pt.show()
 
