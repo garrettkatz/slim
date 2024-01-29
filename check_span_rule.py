@@ -59,7 +59,7 @@ def check_span_rule(X, Y, B, W, solver, verbose=False):
     objective = cp.Minimize(cp.sum(cp.multiply(u[1:],c)))
 
     problem = cp.Problem(objective, constraints)
-    problem.solve(solver=solver, verbose=verbose)
+    problem.solve(solver=solver, verbose=verbose, reoptimize=True)
 
     return (
         problem.status,
