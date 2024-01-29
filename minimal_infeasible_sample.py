@@ -7,6 +7,8 @@ import matplotlib.pyplot as pt
 import scipy.sparse as sp
 from check_span_rule import *
 
+np.set_printoptions(linewidth=400)
+
 do_exp = True
 do_show = True
 
@@ -163,141 +165,187 @@ if do_show:
         [None, None,      None,         None,      None,        xy0345[10:11]],
     ]).toarray().astype(int).T
 
-    # halfsies
-    np.set_printoptions(linewidth=200)
+    print(A)
 
-    # premute vars
-    A = A[:,::-1]
+    # another lil LP to get the certificate (positive lincomb) you want
+    s = cp.Variable(len(A))
+    constraints = [
+        (s >= 0),
+        (cp.sum(s) >= 1),
+        (s @ A == 0)
+    ]
+    objective = cp.Minimize(cp.sum(s))
+    problem = cp.Problem(objective, constraints)
+    problem.solve(solver=solver, verbose=True)
+    s = (s.value * 20).round()
 
-    # augment bias
-    A = np.block([A, np.ones((len(A), 1), dtype=int)])
+    b = np.ones((len(A),1))
+    sAb = np.block([[s.reshape(-1,1), A, b], [0, s @ A, s @ b]])
+    print(np.block([[0, np.arange(sAb.shape[1])], [np.arange(sAb.shape[0]).reshape(-1,1), sAb]]))
 
-    print(np.block([[0, np.arange(A.shape[1])], [np.arange(A.shape[0]).reshape(-1,1), A]]))
-    pt.subplot(1,13,1)
-    pt.imshow(A)
 
-    # eliminating one of two signs in each column
-    sgn = -1
-    i = np.argmax(np.sign(A[:,0]) == sgn)
-    opp = (np.sign(A[:,0]) == -sgn)
-    A[opp] = A[opp] + A[i] * np.fabs(A[opp][:,[0]]) / np.fabs(A[i,0])
-    A = A[np.sign(A[:,0]) != sgn]
+    # def showit(A, cols, sp):
+    #     print(np.block([[0, np.arange(A.shape[1])], [np.arange(A.shape[0]).reshape(-1,1), A]]))
+    #     pt.subplot(1,cols, sp)
+    #     pt.imshow(A)
 
-    print(np.block([[0, np.arange(A.shape[1])], [np.arange(A.shape[0]).reshape(-1,1), A]]))
-    pt.subplot(1,13,2)
-    pt.imshow(A)
+    # # fourier motzkin: doubly exponential dooms it
 
-    # next column has fewer negatives, cancel + keep positive rows
-    sgn = -1
-    i = np.argmax(np.sign(A[:,1]) == sgn)
-    opp = (np.sign(A[:,1]) == -sgn)
-    A[opp] = A[opp] + A[i] * np.fabs(A[opp][:,[1]]) / np.fabs(A[i,1])
-    A = A[np.sign(A[:,1]) != sgn]
+    # # augment bias
+    # Ae = np.block([A, -np.ones((len(A), 1), dtype=int)])
 
-    print(np.block([[0, np.arange(A.shape[1])], [np.arange(A.shape[0]).reshape(-1,1), A]]))
-    pt.subplot(1,13,3)
-    pt.imshow(A)
+    # # eliminate vars left to right
+    # for j in range(A.shape[1]):
+    #     # identify signs
+    #     ps = np.flatnonzero(Ae[:,0] >  0)
+    #     zs = np.flatnonzero(Ae[:,0] == 0)
+    #     ns = np.flatnonzero(Ae[:,0] <  0)
+    #     # eliminate left-most variable with new inequalities
+    #     Ae = np.append(Ae[zs], [
+    #         Ae[n]*Ae[p,0] - Ae[p]*Ae[n,0]
+    #         for (p,n) in it.product(ps, ns)
+    #     ], axis=0)
+    #     Ae = Ae[:,1:]
+    #     # remove obvious redundancies
+    #     Ae = np.unique(Ae, axis=0)
 
-    # next column has more negatives, cancel + keep negative rows
-    sgn = +1
-    i = np.argmax(np.sign(A[:,2]) == sgn)
-    opp = (np.sign(A[:,2]) == -sgn)
-    A[opp] = A[opp] + A[i] * np.fabs(A[opp][:,[2]]) / np.fabs(A[i,2])
-    A = A[np.sign(A[:,2]) != sgn]
+    #     showit(Ae, A.shape[1], j+1)
+    #     input('.')
+    
+    # # halfsies
 
-    print(np.block([[0, np.arange(A.shape[1])], [np.arange(A.shape[0]).reshape(-1,1), A]]))
-    pt.subplot(1,13,4)
-    pt.imshow(A)
+    # # premute vars
+    # A = A[:,::-1]
 
-    # next column has more negatives, cancel + keep negative rows
-    sgn = +1
-    i = np.argmax(np.sign(A[:,3]) == sgn)
-    opp = (np.sign(A[:,3]) == -sgn)
-    A[opp] = A[opp] + A[i] * np.fabs(A[opp][:,[3]]) / np.fabs(A[i,3])
-    A = A[np.sign(A[:,3]) != sgn]
+    # # augment bias
+    # A = np.block([A, np.ones((len(A), 1), dtype=int)])
 
-    print(np.block([[0, np.arange(A.shape[1])], [np.arange(A.shape[0]).reshape(-1,1), A]]))
-    pt.subplot(1,13,5)
-    pt.imshow(A)
+    # print(np.block([[0, np.arange(A.shape[1])], [np.arange(A.shape[0]).reshape(-1,1), A]]))
+    # pt.subplot(1,13,1)
+    # pt.imshow(A)
 
-    # next column has more negatives, cancel + keep negative rows
-    sgn = +1
-    i = np.argmax(np.sign(A[:,4]) == sgn)
-    opp = (np.sign(A[:,4]) == -sgn)
-    A[opp] = A[opp] + A[i] * np.fabs(A[opp][:,[4]]) / np.fabs(A[i,4])
-    A = A[np.sign(A[:,4]) != sgn]
+    # # eliminating one of two signs in each column
+    # sgn = -1
+    # i = np.argmax(np.sign(A[:,0]) == sgn)
+    # opp = (np.sign(A[:,0]) == -sgn)
+    # A[opp] = A[opp] + A[i] * np.fabs(A[opp][:,[0]]) / np.fabs(A[i,0])
+    # A = A[np.sign(A[:,0]) != sgn]
 
-    print(np.block([[0, np.arange(A.shape[1])], [np.arange(A.shape[0]).reshape(-1,1), A]]))
-    pt.subplot(1,13,6)
-    pt.imshow(A)
+    # print(np.block([[0, np.arange(A.shape[1])], [np.arange(A.shape[0]).reshape(-1,1), A]]))
+    # pt.subplot(1,13,2)
+    # pt.imshow(A)
 
-    # next column has fewer negatives, cancel + keep positive rows
-    sgn = -1
-    i = np.argmax(np.sign(A[:,5]) == sgn)
-    opp = (np.sign(A[:,5]) == -sgn)
-    A[opp] = A[opp] + A[i] * np.fabs(A[opp][:,[5]]) / np.fabs(A[i,5])
-    A = A[np.sign(A[:,5]) != sgn]
+    # # next column has fewer negatives, cancel + keep positive rows
+    # sgn = -1
+    # i = np.argmax(np.sign(A[:,1]) == sgn)
+    # opp = (np.sign(A[:,1]) == -sgn)
+    # A[opp] = A[opp] + A[i] * np.fabs(A[opp][:,[1]]) / np.fabs(A[i,1])
+    # A = A[np.sign(A[:,1]) != sgn]
 
-    print(np.block([[0, np.arange(A.shape[1])], [np.arange(A.shape[0]).reshape(-1,1), A]]))
-    pt.subplot(1,13,7)
-    pt.imshow(A)
+    # print(np.block([[0, np.arange(A.shape[1])], [np.arange(A.shape[0]).reshape(-1,1), A]]))
+    # pt.subplot(1,13,3)
+    # pt.imshow(A)
 
-    # next column has more negatives, cancel + keep negative rows
-    sgn = +1
-    i = np.argmax(np.sign(A[:,6]) == sgn)
-    opp = (np.sign(A[:,6]) == -sgn)
-    A[opp] = A[opp] + A[i] * np.fabs(A[opp][:,[6]]) / np.fabs(A[i,6])
-    A = A[np.sign(A[:,6]) != sgn]
+    # # next column has more negatives, cancel + keep negative rows
+    # sgn = +1
+    # i = np.argmax(np.sign(A[:,2]) == sgn)
+    # opp = (np.sign(A[:,2]) == -sgn)
+    # A[opp] = A[opp] + A[i] * np.fabs(A[opp][:,[2]]) / np.fabs(A[i,2])
+    # A = A[np.sign(A[:,2]) != sgn]
 
-    print(np.block([[0, np.arange(A.shape[1])], [np.arange(A.shape[0]).reshape(-1,1), A]]))
-    pt.subplot(1,13,8)
-    pt.imshow(A)
+    # print(np.block([[0, np.arange(A.shape[1])], [np.arange(A.shape[0]).reshape(-1,1), A]]))
+    # pt.subplot(1,13,4)
+    # pt.imshow(A)
 
-    # next column has more negatives, cancel + keep negative rows (well, equal this time)
-    sgn = +1
-    i = np.argmax(np.sign(A[:,7]) == sgn)
-    opp = (np.sign(A[:,7]) == -sgn)
-    A[opp] = A[opp] + A[i] * np.fabs(A[opp][:,[7]]) / np.fabs(A[i,7])
-    A = A[np.sign(A[:,7]) != sgn]
+    # # next column has more negatives, cancel + keep negative rows
+    # sgn = +1
+    # i = np.argmax(np.sign(A[:,3]) == sgn)
+    # opp = (np.sign(A[:,3]) == -sgn)
+    # A[opp] = A[opp] + A[i] * np.fabs(A[opp][:,[3]]) / np.fabs(A[i,3])
+    # A = A[np.sign(A[:,3]) != sgn]
 
-    print(np.block([[0, np.arange(A.shape[1])], [np.arange(A.shape[0]).reshape(-1,1), A]]))
-    pt.subplot(1,13,9)
-    pt.imshow(A)
+    # print(np.block([[0, np.arange(A.shape[1])], [np.arange(A.shape[0]).reshape(-1,1), A]]))
+    # pt.subplot(1,13,5)
+    # pt.imshow(A)
 
-    # next column has fewer negatives, cancel + keep positive rows
-    sgn = -1
-    i = np.argmax(np.sign(A[:,8]) == sgn)
-    opp = (np.sign(A[:,8]) == -sgn)
-    A[opp] = A[opp] + A[i] * np.fabs(A[opp][:,[8]]) / np.fabs(A[i,8])
-    A = A[np.sign(A[:,8]) != sgn]
+    # # next column has more negatives, cancel + keep negative rows
+    # sgn = +1
+    # i = np.argmax(np.sign(A[:,4]) == sgn)
+    # opp = (np.sign(A[:,4]) == -sgn)
+    # A[opp] = A[opp] + A[i] * np.fabs(A[opp][:,[4]]) / np.fabs(A[i,4])
+    # A = A[np.sign(A[:,4]) != sgn]
 
-    print(np.block([[0, np.arange(A.shape[1])], [np.arange(A.shape[0]).reshape(-1,1), A]]))
-    pt.subplot(1,13,10)
-    pt.imshow(A)
+    # print(np.block([[0, np.arange(A.shape[1])], [np.arange(A.shape[0]).reshape(-1,1), A]]))
+    # pt.subplot(1,13,6)
+    # pt.imshow(A)
 
-    # next column has fewer negatives, cancel + keep positive rows
-    sgn = -1
-    i = np.argmax(np.sign(A[:,9]) == sgn)
-    opp = (np.sign(A[:,9]) == -sgn)
-    A[opp] = A[opp] + A[i] * np.fabs(A[opp][:,[9]]) / np.fabs(A[i,9])
-    A = A[np.sign(A[:,9]) != sgn]
+    # # next column has fewer negatives, cancel + keep positive rows
+    # sgn = -1
+    # i = np.argmax(np.sign(A[:,5]) == sgn)
+    # opp = (np.sign(A[:,5]) == -sgn)
+    # A[opp] = A[opp] + A[i] * np.fabs(A[opp][:,[5]]) / np.fabs(A[i,5])
+    # A = A[np.sign(A[:,5]) != sgn]
 
-    print(np.block([[0, np.arange(A.shape[1])], [np.arange(A.shape[0]).reshape(-1,1), A]]))
-    pt.subplot(1,13,11)
-    pt.imshow(A)
+    # print(np.block([[0, np.arange(A.shape[1])], [np.arange(A.shape[0]).reshape(-1,1), A]]))
+    # pt.subplot(1,13,7)
+    # pt.imshow(A)
 
-    # next column has more negatives, cancel + keep negative rows (equal this time, but choice important to also keep some zero rows)
-    sgn = +1
-    i = np.argmax(np.sign(A[:,10]) == sgn)
-    opp = (np.sign(A[:,10]) == -sgn)
-    A[opp] = A[opp] + A[i] * np.fabs(A[opp][:,[10]]) / np.fabs(A[i,10])
-    A = A[np.sign(A[:,10]) != sgn]
+    # # next column has more negatives, cancel + keep negative rows
+    # sgn = +1
+    # i = np.argmax(np.sign(A[:,6]) == sgn)
+    # opp = (np.sign(A[:,6]) == -sgn)
+    # A[opp] = A[opp] + A[i] * np.fabs(A[opp][:,[6]]) / np.fabs(A[i,6])
+    # A = A[np.sign(A[:,6]) != sgn]
 
-    print(np.block([[0, np.arange(A.shape[1])], [np.arange(A.shape[0]).reshape(-1,1), A]]))
-    pt.subplot(1,13,12)
-    pt.imshow(A)
+    # print(np.block([[0, np.arange(A.shape[1])], [np.arange(A.shape[0]).reshape(-1,1), A]]))
+    # pt.subplot(1,13,8)
+    # pt.imshow(A)
 
-    # fifth column all positive, no zeros even, stuck
+    # # next column has more negatives, cancel + keep negative rows (well, equal this time)
+    # sgn = +1
+    # i = np.argmax(np.sign(A[:,7]) == sgn)
+    # opp = (np.sign(A[:,7]) == -sgn)
+    # A[opp] = A[opp] + A[i] * np.fabs(A[opp][:,[7]]) / np.fabs(A[i,7])
+    # A = A[np.sign(A[:,7]) != sgn]
+
+    # print(np.block([[0, np.arange(A.shape[1])], [np.arange(A.shape[0]).reshape(-1,1), A]]))
+    # pt.subplot(1,13,9)
+    # pt.imshow(A)
+
+    # # next column has fewer negatives, cancel + keep positive rows
+    # sgn = -1
+    # i = np.argmax(np.sign(A[:,8]) == sgn)
+    # opp = (np.sign(A[:,8]) == -sgn)
+    # A[opp] = A[opp] + A[i] * np.fabs(A[opp][:,[8]]) / np.fabs(A[i,8])
+    # A = A[np.sign(A[:,8]) != sgn]
+
+    # print(np.block([[0, np.arange(A.shape[1])], [np.arange(A.shape[0]).reshape(-1,1), A]]))
+    # pt.subplot(1,13,10)
+    # pt.imshow(A)
+
+    # # next column has fewer negatives, cancel + keep positive rows
+    # sgn = -1
+    # i = np.argmax(np.sign(A[:,9]) == sgn)
+    # opp = (np.sign(A[:,9]) == -sgn)
+    # A[opp] = A[opp] + A[i] * np.fabs(A[opp][:,[9]]) / np.fabs(A[i,9])
+    # A = A[np.sign(A[:,9]) != sgn]
+
+    # print(np.block([[0, np.arange(A.shape[1])], [np.arange(A.shape[0]).reshape(-1,1), A]]))
+    # pt.subplot(1,13,11)
+    # pt.imshow(A)
+
+    # # next column has more negatives, cancel + keep negative rows (equal this time, but choice important to also keep some zero rows)
+    # sgn = +1
+    # i = np.argmax(np.sign(A[:,10]) == sgn)
+    # opp = (np.sign(A[:,10]) == -sgn)
+    # A[opp] = A[opp] + A[i] * np.fabs(A[opp][:,[10]]) / np.fabs(A[i,10])
+    # A = A[np.sign(A[:,10]) != sgn]
+
+    # print(np.block([[0, np.arange(A.shape[1])], [np.arange(A.shape[0]).reshape(-1,1), A]]))
+    # pt.subplot(1,13,12)
+    # pt.imshow(A)
+
+    # # fifth column all positive, no zeros even, stuck
 
     # # augment for slack variables
     # AIb = np.concatenate((A, -np.eye(len(A)), np.ones((len(A),1))), axis=1)
