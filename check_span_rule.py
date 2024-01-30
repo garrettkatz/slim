@@ -6,7 +6,7 @@ def check_span_rule(X, Y, B, W, solver, verbose=False):
     N = X.shape[1]
     assert (np.fabs(X) == 1).all()
     assert (np.fabs(Y) == 1).all()
-    assert len(X) == len(np.unique(X, axis=1))
+    assert len(X) == len(np.unique(X, axis=0))
     assert len(Y) == len(np.unique(Y, axis=0))
 
     print("Building the tree...")
