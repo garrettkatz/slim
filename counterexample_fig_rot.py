@@ -1,5 +1,6 @@
 import itertools as it
 import numpy as np
+import scipy.sparse as sp
 import matplotlib.pyplot as pt
 import matplotlib.patches as mp 
 from matplotlib import rcParams
@@ -100,5 +101,75 @@ pt.axis('equal')
 pt.axis('off')
 pt.tight_layout()
 pt.savefig("counterexample_tree.pdf")
+# pt.show()
+
+pt.close()
+
+# now draw the certificate
+Z = [X.T*y for (X,y,_) in D]
+A = [[None for _ in range(6)] for _ in range(6)]
+for n in range(6,12):
+    A[n-6][0] = Z[n].T
+    m = n
+    while m > 6:
+        _, p, x, y = E[m-1]
+        print(Z[n].shape, x.shape)
+        A[n-6][m-6] = Z[n].T @ x.reshape(-1,1)
+        m = p
+
+A = sp.bmat(A).toarray()
+
+# another little LP to get the certificate
+s = cp.Variable(len(A))
+constraints = [
+    (s >= 0),
+    (cp.sum(s) >= 1),
+    (s @ A == 0)
+]
+objective = cp.Minimize(cp.sum(s))
+problem = cp.Problem(objective, constraints)
+problem.solve(solver=solver, verbose=True)
+s = s.value
+# whole numbers for easier checking
+s = (s/np.min(s[s > 0])).round().astype(int)
+
+A = A.astype(int)
+sA = s @ A
+print("s @ A:", s @ A)
+print(f"s @ 1 = {s.sum()}")
+
+fs = 20
+
+pt.figure(figsize=(8,20))
+pt.imshow(A, alpha=.5)
+pt.imshow(s.reshape(-1,1), extent = (-2.5, -1.5, len(A)-0.5, -0.5), vmin=A.min(), vmax=A.max(), alpha=.5)
+pt.imshow(sA.reshape(1,-1), extent = (-.5, A.shape[1]-.5, len(A)+1.5, len(A)+.5), vmin=A.min(), vmax=A.max(), alpha=.5)
+
+for (i,j) in it.product(*map(range, A.shape)):
+    if A[i,j] == 0: continue
+    num = str(A[i,j])
+    if A[i,j] > 0: num = " "+num
+    if A[i,j] == +1: num = "+"
+    if A[i,j] == -1: num = "-"
+    pt.text(j-.25,i+.25, num, fontsize=fs)
+
+pt.text(3.5-.25, -.75, "$u_6$", fontsize=fs)
+for j in range(8, A.shape[1]):
+    pt.text(j-.25, -.75, "$\gamma_{%d}$" % (j-8+7), fontsize=fs)
+
+for i in range(len(s)):
+    if s[i] == 0: continue
+    pt.text(-2.25,i+.25,str(s[i]), fontsize=fs)
+
+pt.text(A.shape[1]/2 - .5, -1.75, "$A$", fontsize=fs)
+pt.text(-2.25, -1.75, "$s$", fontsize=fs)
+pt.text(A.shape[1]/2 - 1, len(A) + 1.3, "$s^T A$", fontsize=fs)
+
+# pt.colorbar()
+pt.xlim([-3.5, A.shape[1]+1.5])
+pt.ylim([len(A)+2.5, -2.5])
+pt.axis("off")
+pt.tight_layout()
+pt.savefig("certificate.pdf")
 pt.show()
 
