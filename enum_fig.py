@@ -32,6 +32,7 @@ axs[0].set_title("$X^T$")
 
 squares(axs[1], Y, s = {1: "$+$", -1: "$-$"}, fc={1: "w", -1: "k"}, ec={1: "k", -1: "w"}, fs=12)
 axs[1].set_title("$Y$")
+axs[1].text(-1.5, -Y.shape[0]/2+.5, "$i$")
 
 squares(axs[2], B, s = {True: "T", False: "F"}, fc={True: "w", False: "k"}, ec={True: "k", False: "w"}, fs=10)
 axs[2].set_title("$B$")

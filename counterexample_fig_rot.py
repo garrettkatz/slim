@@ -143,7 +143,9 @@ fs = 20
 pt.figure(figsize=(8,20))
 pt.imshow(A, alpha=.5)
 pt.imshow(s.reshape(-1,1), extent = (-2.5, -1.5, len(A)-0.5, -0.5), vmin=A.min(), vmax=A.max(), alpha=.5)
+pt.imshow(np.ones((len(s),1)), extent = (A.shape[1]+3.5, A.shape[1]+4.5, len(A)-0.5, -0.5), vmin=A.min(), vmax=A.max(), alpha=.5)
 pt.imshow(sA.reshape(1,-1), extent = (-.5, A.shape[1]-.5, len(A)+1.5, len(A)+.5), vmin=A.min(), vmax=A.max(), alpha=.5)
+# pt.imshow(np.array([[s.sum()]]), extent = (A.shape[1]+3.5, A.shape[1]+4.5, len(A)+1.5, len(A)+.5), vmin=A.min(), vmax=A.max(), alpha=.5)
 
 for (i,j) in it.product(*map(range, A.shape)):
     if A[i,j] == 0: continue
@@ -153,20 +155,35 @@ for (i,j) in it.product(*map(range, A.shape)):
     if A[i,j] == -1: num = "-"
     pt.text(j-.25,i+.25, num, fontsize=fs)
 
-pt.text(3.5-.25, -.75, "$u_6$", fontsize=fs)
+# pt.text(3.5-.25, -.75, "$u_6$", fontsize=fs)
+# for j in range(8, A.shape[1]):
+#     pt.text(j-.25, -.75, "$\gamma_{%d}$" % (j-8+7), fontsize=fs)
+
+pt.gca().add_patch(mp.Rectangle((A.shape[1]+.5, -.5), 1.5, A.shape[1], ec='k', fill=False))
+pt.text(A.shape[1]+1-.25, 4-.75, "$u_6$", fontsize=fs)
 for j in range(8, A.shape[1]):
-    pt.text(j-.25, -.75, "$\gamma_{%d}$" % (j-8+7), fontsize=fs)
+    pt.text(A.shape[1]+1-.25, j+.25, "$\gamma_{%d}$" % (j-8+7), fontsize=fs)
 
 for i in range(len(s)):
     if s[i] == 0: continue
     pt.text(-2.25,i+.25,str(s[i]), fontsize=fs)
 
+for i in range(len(s)):
+    pt.text(A.shape[1]+4-.25, i+.25,"+", fontsize=fs)
+
+pt.gca().add_patch(mp.Rectangle((A.shape[1]+3.5, len(A)+.5), 1, 1, ec='k', fill=False))
+
+
 pt.text(A.shape[1]/2 - .5, -1.75, "$A$", fontsize=fs)
+pt.text(A.shape[1]+1-.25, -1.75, "$v$", fontsize=fs)
+pt.text(A.shape[1]+2-.25, -1.75, "$\geq$", fontsize=fs)
+pt.text(A.shape[1]+4-.25, -1.75, "$1$", fontsize=fs)
 pt.text(-2.25, -1.75, "$s$", fontsize=fs)
 pt.text(A.shape[1]/2 - 1, len(A) + 1.3, "$s^T A$", fontsize=fs)
+pt.text(A.shape[1]+4-.5, len(A) + 1.3, str(s.sum()), fontsize=fs)
 
 # pt.colorbar()
-pt.xlim([-3.5, A.shape[1]+1.5])
+pt.xlim([-3.5, A.shape[1]+5.5])
 pt.ylim([len(A)+2.5, -2.5])
 pt.axis("off")
 pt.tight_layout()

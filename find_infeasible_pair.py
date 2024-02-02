@@ -29,10 +29,9 @@ if do_find:
 
     found_infeasible = False
 
-    # for d2 in range(1, len(Y)):
-    #     for d1 in range(d2):
-    for d2 in range(500, 505):
-        for d1 in range(210, 220):
+    for d2 in range(1, len(Y)):
+        for d1 in range(d2):
+
             sample = [d1, d2]
     
             print(f"region sample of {len(Y)}", sample)

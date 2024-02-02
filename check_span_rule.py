@@ -37,6 +37,8 @@ def check_span_rule(X, Y, B, W, solver, verbose=False):
         Xp, yp, _ = D[p]
         assert (Xp == Xn[:-1]).all()
         assert (yp == yn[:-1]).all()
+        assert (x == Xn[-1]).all()
+        assert (y == yn[-1]).all()
 
     print("Running the linear program...")
 
