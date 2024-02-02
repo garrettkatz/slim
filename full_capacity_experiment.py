@@ -7,7 +7,7 @@ import matplotlib
 import matplotlib.pyplot as pt
 from check_span_rule import *
 
-do_exp = False
+do_exp = True
 do_show = True
 
 solvers = sys.argv[1].split(",")

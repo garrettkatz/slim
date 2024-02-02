@@ -22,8 +22,6 @@ B = np.load(f"boundaries_{N}_{solver}.npy")
 # num_region_samples = np.linspace(Y.shape[0]//2, Y.shape[0], region_sampling+1)[:-1].astype(int)
 # num_region_samples = (np.linspace(.1, .9, region_sampling) * len(Y)).astype(int)
 num_region_samples = np.linspace(2, Y.shape[0], region_sampling+1)[:-1].astype(int)
-print(num_region_samples)
-input('.')
 
 if do_exp:
 
