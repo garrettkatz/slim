@@ -11,6 +11,7 @@ np.set_printoptions(linewidth=400)
 
 do_find = True
 do_show = True
+stop_after_first = False
 
 solver = sys.argv[1]
 N = int(sys.argv[2])
@@ -27,10 +28,12 @@ W = W[sorter]
 
 if do_find:
 
-    found_infeasible = False
+    num_samples = 0
+    infeasible_samples = []
 
     for d2 in range(1, len(Y)):
         for d1 in range(d2):
+            num_samples += 1
 
             sample = [d1, d2]
     
@@ -39,25 +42,29 @@ if do_find:
             status, u, g, D, E = result
     
             if status != "optimal":
-                found_infeasible = True
-                fname = f"infeasible_pair_{solver}_{N}.pkl"
-                with open(fname, 'wb') as f: pk.dump((result, sample), f)
-    
-            if found_infeasible: break
-        if found_infeasible: break
+                infeasible_samples.append(sample)
+                fname = f"infeasible_pairs_{solver}_{N}.pkl"
+                with open(fname, 'wb') as f: pk.dump((result, infeasible_samples, num_samples), f)
 
-    if not found_infeasible:
+            if len(infeasible_samples) > 0 and stop_after_first: break
+        if len(infeasible_samples) > 0 and stop_after_first: break
+
+    if len(infeasible_samples) > 0:
+        print("{len(infeasible_samples)} of {num_samples} infeasible sub-samples found")
+    else:
         print("All sub-samples feasible")
 
 if do_show:
 
-    fname = f"infeasible_pair_{solver}_{N}.pkl"
+    fname = f"infeasible_pairs_{solver}_{N}.pkl"
     if not os.path.exists(fname):
         print("All sub-samples feasible")
         sys.exit(1)
 
-    with open(fname, 'rb') as f: result, sample = pk.load(f)
+    with open(fname, 'rb') as f: result, infeasible_samples, num_samples = pk.load(f)
+    print("{len(infeasible_samples)} of {num_samples} infeasible sub-samples found")
 
+    sample = infeasible_samples[0]
     print("sample:", sample)
     print("sorter[sample]:", sorter[sample])
 

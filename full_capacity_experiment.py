@@ -64,6 +64,8 @@ if do_show:
             if solver == solvers[0]: coefs.append(g)
 
             print(f"N={N}, solver={solver}: {status} in {run_time/60}min")
+            print(f"{len(g)} tree nodes total, {N+len(g)} irredundant variables")
+            print(f"{sum(len(Dn[0]) for Dn in D)} inequalities total")
 
         pt.plot(Ns, run_times[solver], 'k-'+marker, label=solver)
 
