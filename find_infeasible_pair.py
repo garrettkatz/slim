@@ -34,10 +34,11 @@ if do_find:
     for d2 in range(1, len(Y)):
         for d1 in range(d2):
             num_samples += 1
+            if d2 < 503: continue # restart after crash
 
             sample = [d1, d2]
-    
-            print(f"region sample of {len(Y)}", sample)
+
+            print(f"checked {num_samples} samples of {len(Y)*(len(Y)-1)//2}, {len(infeasible_samples)} infeasible, sample", sample)
             result = check_span_rule(X, Y[sample], B[sample], W[sample], solver, verbose=False)
             status, u, g, D, E = result
     
@@ -50,7 +51,7 @@ if do_find:
         if len(infeasible_samples) > 0 and stop_after_first: break
 
     if len(infeasible_samples) > 0:
-        print("{len(infeasible_samples)} of {num_samples} infeasible sub-samples found")
+        print(f"{len(infeasible_samples)} of {num_samples} infeasible sub-samples found")
     else:
         print("All sub-samples feasible")
 
@@ -62,7 +63,7 @@ if do_show:
         sys.exit(1)
 
     with open(fname, 'rb') as f: result, infeasible_samples, num_samples = pk.load(f)
-    print("{len(infeasible_samples)} of {num_samples} infeasible sub-samples found")
+    print(f"{len(infeasible_samples)} of {num_samples} infeasible sub-samples found")
 
     sample = infeasible_samples[0]
     print("sample:", sample)
