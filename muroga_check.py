@@ -24,9 +24,9 @@ print("wa|wb, wc norms:")
 print((wb**2).sum())
 print((wc**2).sum())
 
-# check unique fractional weights 
-wa = np.array([14.5, 12.5, 9.5, 7.5, 6, 4, 4, 1.5, 1.5])
-ya = np.sign(wa @ X)
+# # check unique fractional weights 
+# wa = np.array([14.5, 12.5, 9.5, 7.5, 6, 4, 4, 1.5, 1.5])
+# ya = np.sign(wa @ X)
 
 # Sanity check by linprog
 A = X[:, ya < 0].T
