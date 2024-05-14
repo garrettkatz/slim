@@ -55,34 +55,62 @@ for (i,j,k) in sorted(A):
     # # solve it: A wj = b
     # wj = np.linalg.lstsq(A, b, rcond=None)[0].round()
 
-    ## satisfy chow, and for remaining DoFs, flip bits for lowest w's
-    ## fails assert at N=4 and has issues, like invariance when low W[i] are 0
-    ## should refine this to account for chow symmetries, and try to iterate bit flips in order of changing effect on dots with w
+    # ## satisfy chow, and for remaining DoFs, flip bits for lowest w's
+    # ## fails assert at N=4 and has issues, like invariance when low W[i] are 0
+    # ## should refine this to account for chow symmetries, and try to iterate bit flips in order of changing effect on dots with w
 
-    # chow constraints
-    A_chow = np.eye(N) - np.eye(N,k=1)
-    idx = np.flatnonzero(C[j,:-1] == C[j,1:])
-    if C[j,-1] == 0: idx = np.append(idx, N-1)
-    A_chow = A_chow[idx]
-    b_chow = np.zeros(len(A_chow))
+    # # chow constraints
+    # A_chow = np.eye(N) - np.eye(N,k=1)
+    # idx = np.flatnonzero(C[j,:-1] == C[j,1:])
+    # if C[j,-1] == 0: idx = np.append(idx, N-1)
+    # A_chow = A_chow[idx]
+    # b_chow = np.zeros(len(A_chow))
 
-    # low bit constraints
-    A_low = np.empty((N-len(A_chow), N))
-    b_low = np.empty(N - len(A_chow))
-    for n in range(len(A_low)):
-        A_low[n] = X[k]
-        A_low[n,-n-1:] *= -1
-        b_low[n] = A_low[n] @ W[i]
+    # # low bit constraints
+    # A_low = np.empty((N-len(A_chow), N))
+    # b_low = np.empty(N - len(A_chow))
+    # for n in range(len(A_low)):
+    #     A_low[n] = X[k]
+    #     A_low[n,-n-1:] *= -1
+    #     b_low[n] = A_low[n] @ W[i]
 
-    A = np.concatenate((A_chow, A_low), axis=0)
-    b = np.concatenate((b_chow, b_low))
+    # A = np.concatenate((A_chow, A_low), axis=0)
+    # b = np.concatenate((b_chow, b_low))
 
-    # solve it: A wj = b
-    wj = np.linalg.lstsq(A, b, rcond=None)[0].round()
+    # # solve it: A wj = b
+    # wj = np.linalg.lstsq(A, b, rcond=None)[0].round()
+
+    ## satisfy chow, canonical, projected dot, new dot, and minimize weight
+    ## satisfies assert at N=4 but fails N=5, refine projected dot constraint?
+    
+    u = cp.Variable(N)
+
+    # enforce chow symmetries
+    n = np.flatnonzero(C[j,:-1] == C[j,1:])
+    chow_constraints = [u[n] == u[n+1]]
+    if C[j,-1] == 0: chow_constraints.append(u[-1] == 0)
+
+    # stay canonical
+    canonical_constraints = [u[-1] >= 0, u[:-1] >= u[1:]]
+
+    # projected dot
+    wiP = W[i] - (W[i] @ X[k]) * X[k] / N
+    # dot_constraints = [wiP @ u >= 3.75, X[k] @ u >= 1]
+    dot_constraints = [wiP @ u >= ((N+1)/N - 2**(2-N)), X[k] @ u >= 1]
+
+    constraints = chow_constraints + canonical_constraints + dot_constraints
+    objective = cp.Minimize(cp.sum(u))
+    problem = cp.Problem(objective, constraints)
+    problem.solve(solver=solver, verbose=False)
+
+    print(u.value)
+    wj = u.value
+
+    print('  wiP    ',wiP)
 
     ### compare result with desired
     print('  wj     ',wj)
-    print('  x wj   ', X @ wj)
+    print('  x wj   ', (X @ wj).round(1))
     print('  s(x wj)', np.sign(X @ wj).astype(int))
     print('  yj     ', Y[j])
     assert (np.sign(X @ wj) == Y[j]).all()
