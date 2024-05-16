@@ -24,6 +24,7 @@ if __name__ == "__main__":
         
         # solve the regions with chow symmetry constraints
         for i, y in enumerate(Y):
+            print(f"{i} of {len(Y)}")
         
             # symmetric weights
             u = cp.Variable(N)
@@ -35,8 +36,9 @@ if __name__ == "__main__":
             canonical_constraints = [u[-1] >= 0, u[:-1] >= u[1:]]
 
             # enforce chow symmetries
+            chow_constraints = []
             n = np.flatnonzero(C[i,:-1] == C[i,1:])
-            chow_constraints = [u[n] == u[n+1]]
+            if len(n) > 0: chow_constraints.append(u[n] == u[n+1])
             if C[i,-1] == 0: chow_constraints.append(u[-1] == 0)
 
             # solve the linear program            

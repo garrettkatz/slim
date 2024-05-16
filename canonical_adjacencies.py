@@ -23,7 +23,8 @@ if __name__ == "__main__":
         
         # extract adjacencies between them
         A = set()
-        for i,j in it.combinations(range(len(Y)), r=2):
+        for (i,j) in it.combinations(range(len(Y)), r=2):
+            print(f"pair {i},{j} of {len(Y)} regions")
 
             # get all disagreements between region pair
             k = np.flatnonzero(Y[i] != Y[j])
