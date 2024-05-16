@@ -20,6 +20,14 @@ for (i,j,k) in [(921,926,60)]:
     print(i,j,k, W[i], W[j], Y[i,k], X[k], Y[j,k], (W[j] - W[i]).round(1))
     print('  C[i]', C[i])
     print('  C[j]', C[j])
+    print('  xk wi', X[k] @ W[i])
+    print(' disagr', (Y[i] != Y[j]).sum())
+    print('  X ~ 0')
+    print(X[np.fabs(X @ W[i]) == 1] @ X[np.fabs(X @ W[i]) == 1].T)
+    print(X[np.fabs(X @ W[i]) == 1])
+    print(X[np.fabs(X @ W[i]) == 1] @ W[i])
+    print(X[np.fabs(X @ W[i]) == 1] @ W[j])
+    print((W[i] / np.linalg.norm(W[i])) / (W[j] / np.linalg.norm(W[j])))
 
     ab = np.linalg.lstsq(np.stack((W[i], X[k])).T, W[j], rcond=None)[0]
     print('  span', ab, np.stack((W[i], X[k])).T @ ab)
@@ -271,6 +279,8 @@ for (i,j,k) in [(921,926,60)]:
 
     ### compare result with desired
     print('  wj     ',wj)
+    print('  wj wi_  ', wj @ W[i] / np.linalg.norm(W[i]))
+    print('  xk wj  ', (X[k] @ wj))
     print('  x W[i]   ', (X @ W[i]))
     print('  x W[j]   ', (X @ W[j]))
     print('  x wj   ', (X @ wj))
