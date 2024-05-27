@@ -6,8 +6,8 @@ import matplotlib.patches as mp
 from matplotlib import rcParams
 from check_span_rule import *
 
-# rcParams['font.family'] = 'serif'
-# rcParams['text.usetex'] = True
+rcParams['font.family'] = 'serif'
+rcParams['text.usetex'] = True
 
 solver = "GUROBI"
 N = 8
@@ -17,6 +17,17 @@ with np.load(f"regions_{N}_{solver}.npz") as regions:
     X, Y, W = (regions[key] for key in ("XYW"))
 B = np.load(f"boundaries_{N}_{solver}.npy")
 
+# the adversarial pair have the same symmetries; are there other pairs like that?
+all_chow = Y @ X
+all_syms = []
+for i, chow in enumerate(all_chow):
+    syms = tuple(np.flatnonzero(chow[:-1] == chow[1:]))
+    if chow[-1] == 0: syms = syms + (N,)
+    all_syms.append(syms)
+
+print(f"{len(set(all_syms))} of {len(all_syms)} unique chow symmetries")    
+
+
 # sort ascending by number of boundaries
 sorter = np.argsort(B.sum(axis=1))
 
@@ -25,6 +36,15 @@ sample = sorter[[215, 503]] # indices after sorting
 Y = Y[sample]
 B = B[sample]
 W = W[sample]
+
+# check chow parameters
+chow0 = Y[0] @ X
+chow1 = Y[1] @ X
+assert not (Y[0] == Y[1]).all()
+print('chow0', chow0)
+print('chow1', chow1)
+
+# input('..')
 
 # double-check infeasibility
 result = check_span_rule(X, Y, B, W, solver=solver, verbose=True)
