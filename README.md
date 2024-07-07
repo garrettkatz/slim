@@ -1,6 +1,6 @@
-This is the code for the paper
+This is the code for the paper:
 
-Anonymous et al. "On the Feasibility of Single-Pass Full-Capacity Learning in Linear Threshold Neurons with Binary Input Vectors."
+Liu, R., He, B., Tahir, N. and Katz, G.E. "On the Feasibility of Single-Pass Full-Capacity Learning in Linear Threshold Neurons with Binary Input Vectors." In: Proceedings of the Forty-first International Conference on Machine Learning. PMLR, 2024.
 
 This code has been tested on a workstation with 8-core Intel i7 CPU and 32GB of RAM, Fedora 39 Linux, Python 3.11.7, NumPy 1.26.3, SciPy 1.11.1, CVXPY 1.4.1, Gurobi 11.0.0, and MOSEK 10.1.  Some scripts use multiprocessing and will use most of your cores.
 
