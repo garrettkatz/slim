@@ -64,11 +64,11 @@ for b in range(2**8):
 print("lp'd w:")
 print(wlp)
 
-w = np.linalg.lstsq(Xh[boundaries], np.ones(boundaries.sum()), rcond=None)[0]
+w = np.linalg.lstsq(Xh[boundaries], -np.ones(boundaries.sum()), rcond=None)[0]
 print("lstsq'd w, dot with boundaries, max residual:")
 print(w)
 print(Xh[boundaries] @ w)
-print(np.fabs((Xh[boundaries] @ w) - np.ones(boundaries.sum())).max())
+print(np.fabs((Xh[boundaries] @ w) + np.ones(boundaries.sum())).max())
 
 print("wa, wb, wc dots with boundaries:")
 print(Xh[boundaries] @ wa)
