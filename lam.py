@@ -180,7 +180,7 @@ if __name__ == "__main__":
     accuracies = run_trial(
         num_symbols = 100,
         dimension = 1024, # works well when this is much larger than number of symbols
-        num_writes = 50, # try (over)-writing memory this many times
+        num_writes = 100, # try (over)-writing memory this many times
 
         # # setup function handles for VSA method to be tested
         # initialize = lam_initialize,
@@ -194,7 +194,7 @@ if __name__ == "__main__":
         read = hrr_read,
         Codec = HRRCodec,
 
-        replace=False, # kind of "warm-up" appears when replace=True, maybe recovering from early overwrite
+        replace=True, # kind of "warm-up" appears when replace=True, maybe recovering from early overwrite
     )
 
     # show accuracy curve
