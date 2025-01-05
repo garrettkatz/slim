@@ -1,3 +1,4 @@
+import pickle as pk
 import numpy as np
 
 # for profiling the script, or not
@@ -75,13 +76,16 @@ def hrr_read(m, k):
 def hrr_write(m, k, v):
     # binds value vector v to key vector k and stores result in memory m
     # returns updated memory
-
-    # # erase version
-    # v_old = hrr_read(m, k)
-    # return m - hrr_conv(k, v_old) + hrr_conv(k, v)
-
-    # no erase version
+    # does not try to erase earlier writes with the same key
     return m + hrr_conv(k, v)
+
+@profile
+def hrr_overwrite(m, k, v):
+    # binds value vector v to key vector k and stores result in memory m
+    # returns updated memory
+    # tries to erase earlier writes with the same key
+    v_old = hrr_read(m, k)
+    return m - hrr_conv(k, v_old) + hrr_conv(k, v)
 
 class HRRCodec:
     @profile
@@ -116,7 +120,7 @@ class HRRCodec:
 
 
 @profile
-def run_trial(num_symbols, dimension, num_writes, initialize, write, read, Codec, replace=True):
+def run_trial(num_symbols, dimension, num_writes, initialize, write, read, Codec, replace=True, verbose=True):
     # runs a sequence of VSA memory (over)writes and saves retrieval accuracy over time
     # returns the list of accuracies
     # num_symbols, dimension, num_writes are ints
@@ -142,7 +146,7 @@ def run_trial(num_symbols, dimension, num_writes, initialize, write, read, Codec
 
     # perform a series of writes
     for t in range(num_writes):
-        print(f"write {t} of {num_writes}...")
+        if verbose: print(f"write {t} of {num_writes}...")
 
         # choose a new random memory to write
         if replace:
@@ -177,32 +181,95 @@ def run_trial(num_symbols, dimension, num_writes, initialize, write, read, Codec
 
 if __name__ == "__main__":
 
-    accuracies = run_trial(
-        num_symbols = 100,
-        dimension = 1024, # works well when this is much larger than number of symbols
-        num_writes = 100, # try (over)-writing memory this many times
+    num_reps = 30 # this many random repetitions of the experiment
+    num_symbols = 32 # this many distinct symbols (addresses and values)
+    dimensions = (256, 512, 1024, 2048) # try these vector dimensions
+    num_writes = 50 # try (over)-writing memory this many times
+    replace = False # whether to sample addresses with replacement (whether to overwrite early in the trial)
 
-        # # setup function handles for VSA method to be tested
-        # initialize = lam_initialize,
-        # write = lam_write,
-        # read = lam_read,
-        # Codec = LAMCodec,
+    do_run = False
+    do_show = True
 
-        # setup function handles for VSA method to be tested
-        initialize = hrr_initialize,
-        write = hrr_write,
-        read = hrr_read,
-        Codec = HRRCodec,
+    if do_run:
+        accuracies = {}
+        for overwrite in (False, True):
+            for dimension in dimensions:
+                accuracies[overwrite, dimension] = []
+    
+                for rep in range(num_reps):
+                    print(f"{overwrite=}, {dimension=}, {rep=}")
+    
+                    accuracy_curve = run_trial(
+                        num_symbols,
+                        dimension, # works well when this is much larger than number of symbols
+                        num_writes,
+                
+                        # # setup function handles for VSA method to be tested
+                        # lam_initialize,
+                        # lam_write,
+                        # lam_read,
+                        # LAMCodec,
+                
+                        hrr_initialize,
+                        hrr_overwrite if overwrite else hrr_write,
+                        hrr_read,
+                        HRRCodec,
+                
+                        replace, # mini "warm-up" can appear when replace=True, maybe recovering from early overwrite
+                        verbose=False,
+                    )
+    
+                    accuracies[overwrite, dimension].append(accuracy_curve)
 
-        replace=True, # kind of "warm-up" appears when replace=True, maybe recovering from early overwrite
-    )
+        with open(f"lam_{num_symbols}_symbols_{num_writes}_writes_replace_{replace}.pkl", "wb") as f: pk.dump(accuracies, f)
 
-    # show accuracy curve
-    import matplotlib.pyplot as pt
-    pt.plot(accuracies)
-    pt.xlabel("Number of writes")
-    pt.ylabel("Retrieval accuracy")
-    pt.show()
+    if do_show:
 
+        with open(f"lam_{num_symbols}_symbols_{num_writes}_writes_replace_{replace}.pkl", "rb") as f: accuracies = pk.load(f)
 
+        import matplotlib.pyplot as pt
+
+        # plot accuracy curves
+        fig, ax = pt.subplots(2, len(dimensions), figsize=(10,4), constrained_layout=True)
+        for o, overwrite in enumerate((False, True)):
+            for d, dimension in enumerate(dimensions):
+    
+                data = np.array(accuracies[overwrite, dimension])
+                ax[o,d].plot(data.T, color=(0.85,)*3)
+                ax[o,d].plot(data.mean(axis=0), color='k')
+                ax[o,d].set_ylim([0,1.1])
+
+                if o == 0:
+                    ax[o,d].set_title(f"{dimension=}")
+                if d == 0:
+                    ax[o,d].set_ylabel(f"{overwrite=}")
+    
+        fig.supxlabel("Number of writes")
+        fig.supylabel("Retrieval accuracy")
+        pt.savefig(f"lam_acc_{num_symbols}_symbols_{num_writes}_writes_replace_{replace}.pdf")
+        pt.show()
+
+        # plot number of writes until first incorrect read
+        fig, ax = pt.subplots(2, len(dimensions), figsize=(10,4), constrained_layout=True)
+        for o, overwrite in enumerate((False, True)):
+            for d, dimension in enumerate(dimensions):
+    
+                data = np.array(accuracies[overwrite, dimension])
+                num_correct = (data < 1).argmax(axis=1) - 1
+
+                print(f"{overwrite=}, {dimension=}: streak = {num_correct.mean():.3f} +/- {num_correct.std():.3f}")
+
+                ax[o,d].hist(num_correct, bins = np.arange(0, num_writes+1, 2), facecolor=(0.85,)*3, edgecolor='k')
+                ax[o,d].set_xlim([0, num_writes+1])
+
+                if o == 0:
+                    ax[o,d].set_title(f"{dimension=}")
+                if d == 0:
+                    ax[o,d].set_ylabel(f"{overwrite=}")
+    
+        fig.supxlabel("Number of correct writes")
+        fig.supylabel("Frequency")
+        pt.savefig(f"lam_cor_{num_symbols}_symbols_{num_writes}_writes_replace_{replace}.pdf")
+        pt.show()
+        
 
