@@ -96,6 +96,10 @@ class HRRCodec:
         # in HRRs, keys and values need to be different vectors
         # this is because binding is symmetric, footnote 2 on p. 2 (624)
         # otherwise e.g. if M[1] = 3 and M[3] = 2, unbinding 3 will return superposition of 1 and 2
+        self.key_embeddings = np.random.randn(len(symbols), dimension) / dimension ** 0.5
+        self.val_embeddings = np.random.randn(len(symbols), dimension) / dimension ** 0.5
+
+        # this was a bug, but oddly worked better with overwrite=True
         self.key_embeddings = np.random.randn(len(symbols), dimension) / dimension
         self.val_embeddings = np.random.randn(len(symbols), dimension) / dimension
 
@@ -117,6 +121,51 @@ class HRRCodec:
         # return the symbol whose value embedding is most similar (in dot-product) to given vector
         return self.symbols[(self.val_embeddings @ vector).argmax()]
 
+@profile
+def binary_hrr_read(m, k):
+    # returns value vector currently bound to key vector k in memory m
+    k_inv = np.roll(k[::-1], 1)
+    v_noisy = hrr_conv(k_inv, m)
+    v_clean = np.sign(v_noisy) / v_noisy.size ** 0.5
+    return v_clean
+
+@profile
+def binary_hrr_overwrite(m, k, v):
+    # binds value vector v to key vector k and stores result in memory m
+    # returns updated memory
+    # tries to erase earlier writes with the same key
+    v_old = binary_hrr_read(m, k)
+    return m - hrr_conv(k, v_old) + hrr_conv(k, v)
+
+class BinaryHRRCodec:
+    @profile
+    def __init__(self, symbols, dimension):
+        # initializes codec with embedding vectors of given dimension for each symbol in symbols list
+        self.symbols = symbols
+        
+        # in HRRs, keys and values need to be different vectors
+        # this is because binding is symmetric, footnote 2 on p. 2 (624)
+        # otherwise e.g. if M[1] = 3 and M[3] = 2, unbinding 3 will return superposition of 1 and 2
+        self.key_embeddings = np.random.choice([-1,+1], size=(len(symbols), dimension)) / dimension ** 0.5
+        self.val_embeddings = np.random.choice([-1,+1], size=(len(symbols), dimension)) / dimension ** 0.5
+
+    @profile
+    def encode_key(self, symbol):
+        # return the vector embedding of given symbol as a key
+        return self.key_embeddings[self.symbols.index(symbol)]
+    @profile
+    def encode_val(self, symbol):
+        # return the vector embedding of given symbol as a value
+        return self.val_embeddings[self.symbols.index(symbol)]
+
+    @profile
+    def decode_key(self, vector):
+        # return the symbol whose key embedding is most similar (in dot-product) to given vector
+        return self.symbols[(self.val_embeddings @ vector).argmax()]
+    @profile
+    def decode_val(self, vector):
+        # return the symbol whose value embedding is most similar (in dot-product) to given vector
+        return self.symbols[(self.val_embeddings @ vector).argmax()]
 
 
 @profile
@@ -181,13 +230,13 @@ def run_trial(num_symbols, dimension, num_writes, initialize, write, read, Codec
 
 if __name__ == "__main__":
 
-    num_reps = 30 # this many random repetitions of the experiment
+    num_reps = 10 # this many random repetitions of the experiment
     num_symbols = 32 # this many distinct symbols (addresses and values)
     dimensions = (256, 512, 1024, 2048) # try these vector dimensions
     num_writes = 50 # try (over)-writing memory this many times
-    replace = False # whether to sample addresses with replacement (whether to overwrite early in the trial)
+    replace = True # whether to sample addresses with replacement (whether to overwrite early in the trial)
 
-    do_run = False
+    do_run = True
     do_show = True
 
     if do_run:
@@ -210,10 +259,15 @@ if __name__ == "__main__":
                         # lam_read,
                         # LAMCodec,
                 
+                        # hrr_initialize,
+                        # hrr_overwrite if overwrite else hrr_write,
+                        # hrr_read,
+                        # HRRCodec,
+
                         hrr_initialize,
-                        hrr_overwrite if overwrite else hrr_write,
-                        hrr_read,
-                        HRRCodec,
+                        binary_hrr_overwrite if overwrite else hrr_write,
+                        binary_hrr_read,
+                        BinaryHRRCodec,
                 
                         replace, # mini "warm-up" can appear when replace=True, maybe recovering from early overwrite
                         verbose=False,
