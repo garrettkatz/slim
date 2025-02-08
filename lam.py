@@ -1,5 +1,6 @@
 import pickle as pk
 import numpy as np
+from hadamard_cleanup import sylvester, cleanup
 
 # for profiling the script, or not
 try: profile
@@ -167,6 +168,50 @@ class BinaryHRRCodec:
         # return the symbol whose value embedding is most similar (in dot-product) to given vector
         return self.symbols[(self.val_embeddings @ vector).argmax()]
 
+@profile
+def hadamard_hrr_read(m, k):
+    # returns value vector currently bound to key vector k in memory m
+    k_inv = np.roll(k[::-1], 1)
+    v_noisy = hrr_conv(k_inv, m)
+    v_clean = cleanup(v_noisy)
+    return v_clean
+
+@profile
+def hadamard_hrr_overwrite(m, k, v):
+    # binds value vector v to key vector k and stores result in memory m
+    # returns updated memory
+    # tries to erase earlier writes with the same key
+    v_old = hadamard_hrr_read(m, k)
+    return m - hrr_conv(k, v_old) + hrr_conv(k, v)
+
+class HadamardHRRCodec:
+    @profile
+    def __init__(self, symbols, dimension):
+        # initializes codec with embedding vectors of given dimension for each symbol in symbols list
+        self.symbols = symbols
+        
+        # keys must have HRR stats, but values can be hadamard
+        self.key_embeddings = np.random.randn(len(symbols), dimension) / dimension ** 0.5
+        self.val_embeddings = sylvester(int(np.ceil(np.log2(dimension))))[:len(symbols)]
+
+    @profile
+    def encode_key(self, symbol):
+        # return the vector embedding of given symbol as a key
+        return self.key_embeddings[self.symbols.index(symbol)]
+    @profile
+    def encode_val(self, symbol):
+        # return the vector embedding of given symbol as a value
+        return self.val_embeddings[self.symbols.index(symbol)]
+
+    @profile
+    def decode_key(self, vector):
+        # return the symbol whose key embedding is most similar (in dot-product) to given vector
+        return self.symbols[(self.val_embeddings @ vector).argmax()]
+    @profile
+    def decode_val(self, vector):
+        # return the symbol whose value embedding is most similar (in dot-product) to given vector
+        return self.symbols[(self.val_embeddings @ vector).argmax()]
+
 
 @profile
 def run_trial(num_symbols, dimension, num_writes, initialize, write, read, Codec, replace=True, verbose=True):
@@ -259,15 +304,20 @@ if __name__ == "__main__":
                         # lam_read,
                         # LAMCodec,
                 
-                        # hrr_initialize,
-                        # hrr_overwrite if overwrite else hrr_write,
-                        # hrr_read,
-                        # HRRCodec,
-
                         hrr_initialize,
-                        binary_hrr_overwrite if overwrite else hrr_write,
-                        binary_hrr_read,
-                        BinaryHRRCodec,
+                        hrr_overwrite if overwrite else hrr_write,
+                        hrr_read,
+                        HRRCodec,
+
+                        # hrr_initialize,
+                        # binary_hrr_overwrite if overwrite else hrr_write,
+                        # binary_hrr_read,
+                        # BinaryHRRCodec,
+
+                        # hrr_initialize,
+                        # hadamard_hrr_overwrite if overwrite else hrr_write,
+                        # hadamard_hrr_read,
+                        # HadamardHRRCodec,
                 
                         replace, # mini "warm-up" can appear when replace=True, maybe recovering from early overwrite
                         verbose=False,
