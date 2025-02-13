@@ -3,9 +3,24 @@ import matplotlib.pyplot as pt
 from lam import hrr_conv, hrr_read
 from hadamard_cleanup import sylvester, cleanup
 
+def generalized_sylvester(K):
+    H = np.array([[1]])
+    for k in range(1, K+1):
+        # t = np.random.rand()*np.pi/2
+        # t = np.linspace(0, np.pi, K+2)[-k-1]
+        t = np.linspace(0, np.pi, K+2)[k]
+        c, s = np.cos(t), np.sin(t)
+        H = np.block([[c*H, s*H], [s*H, -c*H]])
+        print(f"gen syl {k=}: {t=:.3f}")
+
+    assert np.allclose(H.T @ H, np.eye(len(H)))
+
+    return H
+    
+
 # print(sylvester(3))
-K_min, K_max = 4, 12
-num_in = 10
+K_min, K_max = 4, 8
+num_in = 2
 
 recalls = {}
 for K in range(K_min, K_max+1):
@@ -17,7 +32,8 @@ for K in range(K_min, K_max+1):
     H = {
         "g": np.random.randn(N,N) / N**.5, # standard gaussian
         "b": np.sign(np.random.randn(N,N)) / N**.5, # standard discrete
-        "h": sylvester(K), # hadamard
+        # "h": sylvester(K) / N**.5, # hadamard
+        "h": generalized_sylvester(K), # hadamard
     }
     
     recalls[K] = {key: [] for key in H.keys()}
