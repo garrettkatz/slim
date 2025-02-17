@@ -36,6 +36,7 @@ def generalized_sylvester(K):
     for k in range(1, K+1):
         # t = np.random.rand()*2*np.pi
         t = np.linspace(0, 2*np.pi, K+2)[k]
+        # t = np.linspace(0, 2*np.pi, K)[k-1]
         c, s = np.cos(t), np.sin(t)
         H = np.block([[c*H, s*H], [s*H, -c*H]])
         ts.append(t)
@@ -44,6 +45,15 @@ def generalized_sylvester(K):
     assert np.allclose(H.T @ H, np.eye(len(H)))
 
     return H, ts
+
+def generalized_reconstruct(thetas, idx):
+    v = np.array([1.])
+    for k, t in enumerate(thetas):
+        if (idx >> k) & 1 == 0:
+            v = np.concatenate([np.cos(t) * v,  np.sin(t) * v])
+        else:
+            v = np.concatenate([np.sin(t) * v, -np.cos(t) * v])
+    return v
 
 # return sylvester-hadamard vector with largest dot product with x
 def generalized_cleanup(u, thetas):
@@ -59,12 +69,13 @@ def generalized_cleanup(u, thetas):
 
     # reconstruct v*
     idx = np.argmax(u.reshape(N))
-    v = np.array([1.])
-    for k, t in zip(range(K), thetas):
-        a, b = np.cos(t), np.sin(t)
-        if idx & 1 == 1: a, b = b, -a
-        idx = idx >> 1
-        v = np.concatenate([a * v, b * v])
+    v = generalized_reconstruct(thetas, idx)
+    # v = np.array([1.])
+    # for k, t in zip(range(K), thetas):
+    #     a, b = np.cos(t), np.sin(t)
+    #     if idx & 1 == 1: a, b = b, -a
+    #     idx = idx >> 1
+    #     v = np.concatenate([a * v, b * v])
 
     return v
 
@@ -75,9 +86,9 @@ if __name__ == "__main__":
     from matplotlib import rcParams
 
     # config for big check
-    do_check = False
+    do_check = True
     num_reps = 30
-    K_max = 13
+    K_max = 14
 
     if do_check:
         # check a few sylvester hadamards
@@ -109,13 +120,14 @@ if __name__ == "__main__":
         for K in range(1,K_max+1):
             print(f"timing {K}...")
             N = 2**K
-    
+            V, thetas = generalized_sylvester(K)
+
             runtimes["Brute-Force"][K] = []
             runtimes["Efficient"][K] = []
     
             for rep in range(num_reps):
 
-                V, thetas = generalized_sylvester(K)
+                # V, thetas = generalized_sylvester(K)
                 x = np.random.randn(N)
     
                 # start = perf_counter()
